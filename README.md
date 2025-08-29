@@ -364,6 +364,12 @@ Contribuições são bem-vindas! Por favor, sinta-se à vontade para:
 3. Enviar pull requests
 4. Melhorar a documentação
 
+## Autor
+
+**Alexandre Lisboa**
+- GitHub: [@Alexandrelisboa845](https://github.com/Alexandrelisboa845)
+- Repositório: [https://github.com/Alexandrelisboa845/failover](https://github.com/Alexandrelisboa845/failover)
+
 ## Licença
 
 Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.

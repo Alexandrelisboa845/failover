@@ -1,8 +1,8 @@
 name: failover
 description: "Sistema robusto de failover para alternância automática entre ambientes de produção, desenvolvimento e staging em aplicações Flutter."
 version: 1.0.0
-homepage: https://github.com/your-username/failover
-repository: https://github.com/your-username/failover
+homepage: https://github.com/Alexandrelisboa845/failover
+repository: https://github.com/Alexandrelisboa845/failover
 keywords:
   - flutter
   - failover
