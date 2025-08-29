@@ -1,6 +1,20 @@
-# Sistema de Failover para Flutter
+# 🔄 Sistema de Failover para Flutter
 
-Um sistema robusto e flexível para gerenciar failover entre diferentes ambientes (produção, desenvolvimento, staging) em aplicações Flutter.
+<div align="center">
+
+<img src="assets/logo.svg" width="120" height="120" alt="Failover Logo">
+
+![Failover](https://img.shields.io/badge/Failover-1.0.0-blue?style=for-the-badge&logo=dart)
+![Flutter](https://img.shields.io/badge/Flutter-3.0+-blue?style=for-the-badge&logo=flutter)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+
+**Um sistema robusto e flexível para gerenciar failover entre diferentes ambientes (produção, desenvolvimento, staging) em aplicações Flutter.**
+
+[![Pub](https://img.shields.io/pub/v/failover.svg)](https://pub.dev/packages/failover)
+[![Pub Points](https://img.shields.io/pub/points/failover)](https://pub.dev/packages/failover/score)
+[![Popularity](https://img.shields.io/pub/popularity/failover)](https://pub.dev/packages/failover/score)
+
+</div>
 
 ## Características
 
