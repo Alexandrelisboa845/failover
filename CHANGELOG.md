@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.1
+
+### Features
+- Adicionado logo SVG personalizado para o pacote
+- Incluídos badges profissionais no README
+- Melhorada a apresentação visual do pacote
+- Adicionados assets ao pubspec.yaml
+
+### Visual
+- Logo com design de failover (setas e indicadores de ambiente)
+- Badges para versão, Flutter, licença e status do pub.dev
+- Layout centralizado e profissional no README
+
 ## 1.0.0
 
 ### Features
