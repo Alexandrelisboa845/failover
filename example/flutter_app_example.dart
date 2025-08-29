@@ -5,10 +5,44 @@ import 'dart:convert';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializa o sistema de failover
+  // Inicializa o sistema de failover com headers personalizados
   await FailoverHelper.initialize(
     initialEnvironment: Environment.development,
     enableHealthCheck: false, // Desabilita health check para o exemplo
+    customConfigs: {
+      Environment.production: EnvironmentConfig(
+        apiUrl: 'https://api.production.example.com',
+        apiKey: 'prod_key_secure_123',
+        firebaseToken: 'firebase_prod_token_abc',
+        customAuthHeader: 'X-Prod-Auth',
+        enableLogging: false,
+        enableAnalytics: true,
+        timeout: Duration(seconds: 30),
+        maxRetries: 3,
+        authType: AuthType.both,
+      ),
+      Environment.development: EnvironmentConfig(
+        apiUrl: 'https://api.dev.example.com',
+        apiKey: 'dev_key_test_456',
+        customAuthHeader: 'X-Dev-Key',
+        enableLogging: true,
+        enableAnalytics: false,
+        timeout: Duration(seconds: 10),
+        maxRetries: 1,
+        authType: AuthType.apiKey,
+      ),
+      Environment.staging: EnvironmentConfig(
+        apiUrl: 'https://api.staging.example.com',
+        apiKey: 'staging_key_789',
+        firebaseToken: 'firebase_staging_token_xyz',
+        customAuthHeader: 'X-Staging-Token',
+        enableLogging: true,
+        enableAnalytics: true,
+        timeout: Duration(seconds: 20),
+        maxRetries: 2,
+        authType: AuthType.firebase,
+      ),
+    },
   );
 
   runApp(FailoverDemoApp());

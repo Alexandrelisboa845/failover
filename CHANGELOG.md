@@ -19,6 +19,14 @@
 - **NOVO:** Headers de autenticação personalizáveis
 - **NOVO:** Campo `customAuthHeader` para nomes personalizados
 
+### Interceptors
+- **NOVO:** Sistema completo de interceptores HTTP
+- **NOVO:** Interceptores antes da requisição (`onRequest`)
+- **NOVO:** Interceptores após a resposta (`onResponse`)
+- **NOVO:** Interceptores em caso de erro (`onError`)
+- **NOVO:** Suporte para múltiplos interceptores por ambiente
+- **NOVO:** Interceptores de exemplo: Logging, Métricas, Cache
+
 ### Visual
 - Logo com design de failover (setas e indicadores de ambiente)
 - Badges para versão, Flutter, licença e status do pub.dev

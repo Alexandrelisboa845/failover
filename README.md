@@ -204,6 +204,166 @@ final stats = FailoverHelper.getStats();
 print('Estatísticas: $stats');
 ```
 
+### 8. Exemplos de Headers Personalizados
+
+#### **API Corporativa com Header Padrão:**
+```dart
+EnvironmentConfig(
+  apiUrl: 'https://api.empresa.com',
+  apiKey: 'chave_corporativa_123',
+  authType: AuthType.apiKey,
+  // Resultado: x-api-key: chave_corporativa_123
+)
+```
+
+### 9. Sistema de Interceptores
+
+O sistema suporta **interceptores personalizados** para adicionar lógica customizada antes e depois das requisições:
+
+#### **Interceptor de Logging:**
+```dart
+class LoggingInterceptor implements HttpInterceptor {
+  @override
+  Future<void> onRequest(HttpClientRequest request, EnvironmentConfig config) async {
+    print('📡 Requisição: ${request.method} ${request.uri}');
+    print('🔑 Ambiente: ${config.apiUrl}');
+  }
+  
+  @override
+  Future<void> onResponse(HttpClientResponse response, EnvironmentConfig config) async {
+    print('✅ Resposta: ${response.statusCode}');
+  }
+  
+  @override
+  Future<void> onError(Object error, EnvironmentConfig config) async {
+    print('❌ Erro: $error');
+  }
+}
+```
+
+#### **Interceptor de Métricas:**
+```dart
+class MetricsInterceptor implements HttpInterceptor {
+  final Map<String, int> _requestCount = {};
+  
+  @override
+  Future<void> onRequest(HttpClientRequest request, EnvironmentConfig config) async {
+    final key = '${config.apiUrl}${request.method}';
+    _requestCount[key] = (_requestCount[key] ?? 0) + 1;
+  }
+  
+  @override
+  Future<void> onResponse(HttpClientResponse response, EnvironmentConfig config) async {
+    // Registra métricas de sucesso
+  }
+  
+  @override
+  Future<void> onError(Object error, EnvironmentConfig config) async {
+    // Registra métricas de erro
+  }
+  
+  Map<String, int> get metrics => Map.unmodifiable(_requestCount);
+}
+```
+
+#### **Interceptor de Cache:**
+```dart
+class CacheInterceptor implements HttpInterceptor {
+  final Map<String, dynamic> _cache = {};
+  
+  @override
+  Future<void> onRequest(HttpClientRequest request, EnvironmentConfig config) async {
+    if (request.method == 'GET') {
+      final cacheKey = '${request.uri}';
+      if (_cache.containsKey(cacheKey)) {
+        // Retorna do cache se disponível
+      }
+    }
+  }
+  
+  @override
+  Future<void> onResponse(HttpClientResponse response, EnvironmentConfig config) async {
+    if (response.statusCode == 200) {
+      // Armazena no cache
+    }
+  }
+  
+  @override
+  Future<void> onError(Object error, EnvironmentConfig config) async {}
+}
+```
+
+#### **Uso dos Interceptores:**
+```dart
+final config = EnvironmentConfig(
+  apiUrl: 'https://api.meuapp.com',
+  apiKey: 'minha_chave',
+  interceptors: [
+    LoggingInterceptor(),
+    MetricsInterceptor(),
+    CacheInterceptor(),
+  ],
+  // ... outras configurações
+);
+```
+
+#### **API Corporativa com Header Personalizado:**
+```dart
+EnvironmentConfig(
+  apiUrl: 'https://api.empresa.com',
+  apiKey: 'chave_corporativa_123',
+  customAuthHeader: 'X-API-Key',
+  authType: AuthType.apiKey,
+  // Resultado: X-API-Key: chave_corporativa_123
+)
+```
+
+#### **Microserviço com Token Personalizado:**
+```dart
+EnvironmentConfig(
+  apiUrl: 'https://microservice.auth.com',
+  firebaseToken: 'firebase_token_456',
+  customAuthHeader: 'X-Service-Token',
+  authType: AuthType.firebase,
+  // Resultado: X-Service-Token: Bearer firebase_token_456
+)
+```
+
+#### **Sistema Legado com Header Específico:**
+```dart
+EnvironmentConfig(
+  apiUrl: 'https://legacy.api.com',
+  apiKey: 'legacy_key_789',
+  customAuthHeader: 'X-Legacy-Auth',
+  authType: AuthType.apiKey,
+  // Resultado: X-Legacy-Auth: legacy_key_789
+)
+```
+
+#### **Ambiente de Desenvolvimento com Header Simples:**
+```dart
+EnvironmentConfig(
+  apiUrl: 'https://dev.api.com',
+  apiKey: 'dev_key_simple',
+  customAuthHeader: 'X-Dev-Key',
+  authType: AuthType.apiKey,
+  // Resultado: X-Dev-Key: dev_key_simple
+)
+```
+
+#### **Sistema com Autenticação Dupla:**
+```dart
+EnvironmentConfig(
+  apiUrl: 'https://secure.api.com',
+  apiKey: 'backup_key',
+  firebaseToken: 'primary_token',
+  customAuthHeader: 'X-Auth-Header',
+  authType: AuthType.both,
+  // Resultado: X-Auth-Header: Bearer primary_token
+  // Fallback: X-Auth-Header: backup_key
+)
+```
+
 ## Estrutura da API
 
 ### EnvironmentConfig
@@ -219,6 +379,22 @@ class EnvironmentConfig {
   final Duration timeout;     // Timeout para requisições
   final int maxRetries;       // Número máximo de tentativas
   final AuthType authType;    // Tipo de autenticação
+  final List<HttpInterceptor> interceptors; // Lista de interceptores
+}
+```
+
+### HttpInterceptor
+
+```dart
+abstract class HttpInterceptor {
+  /// Executado antes da requisição ser enviada
+  Future<void> onRequest(HttpClientRequest request, EnvironmentConfig config);
+  
+  /// Executado após a resposta ser recebida
+  Future<void> onResponse(HttpClientResponse response, EnvironmentConfig config);
+  
+  /// Executado quando ocorre um erro
+  Future<void> onError(Object error, EnvironmentConfig config);
 }
 ```
 
@@ -313,9 +489,43 @@ import 'package:flutter/material.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Inicializa o sistema de failover
+  // Inicializa o sistema de failover com headers personalizados
   await FailoverHelper.initialize(
     initialEnvironment: Environment.development,
+    customConfigs: {
+      Environment.production: EnvironmentConfig(
+        apiUrl: 'https://api.meuapp.com',
+        apiKey: 'prod_key_123',
+        firebaseToken: 'firebase_prod_token',
+        customAuthHeader: 'X-Prod-Auth',
+        enableLogging: false,
+        enableAnalytics: true,
+        timeout: Duration(seconds: 30),
+        maxRetries: 3,
+        authType: AuthType.both,
+      ),
+      Environment.development: EnvironmentConfig(
+        apiUrl: 'https://api-dev.meuapp.com',
+        apiKey: 'dev_key_456',
+        customAuthHeader: 'X-Dev-Key',
+        enableLogging: true,
+        enableAnalytics: false,
+        timeout: Duration(seconds: 10),
+        maxRetries: 1,
+        authType: AuthType.apiKey,
+      ),
+      Environment.staging: EnvironmentConfig(
+        apiUrl: 'https://api-staging.meuapp.com',
+        apiKey: 'staging_key_789',
+        firebaseToken: 'firebase_staging_token',
+        customAuthHeader: 'X-Staging-Token',
+        enableLogging: true,
+        enableAnalytics: true,
+        timeout: Duration(seconds: 20),
+        maxRetries: 2,
+        authType: AuthType.firebase,
+      ),
+    },
   );
   
   // Adiciona listener para mudanças de ambiente

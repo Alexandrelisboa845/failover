@@ -1,6 +1,39 @@
 import 'dart:async';
 import 'dart:io';
 
+/// Interceptor para requisições HTTP
+abstract class HttpInterceptor {
+  /// Executado antes da requisição ser enviada
+  Future<void> onRequest(HttpClientRequest request, EnvironmentConfig config);
+
+  /// Executado após a resposta ser recebida
+  Future<void> onResponse(
+    HttpClientResponse response,
+    EnvironmentConfig config,
+  );
+
+  /// Executado quando ocorre um erro
+  Future<void> onError(Object error, EnvironmentConfig config);
+}
+
+/// Interceptor padrão que não faz nada
+class NoOpInterceptor implements HttpInterceptor {
+  @override
+  Future<void> onRequest(
+    HttpClientRequest request,
+    EnvironmentConfig config,
+  ) async {}
+
+  @override
+  Future<void> onResponse(
+    HttpClientResponse response,
+    EnvironmentConfig config,
+  ) async {}
+
+  @override
+  Future<void> onError(Object error, EnvironmentConfig config) async {}
+}
+
 /// Enumeração dos ambientes disponíveis
 enum Environment { production, development, staging }
 
@@ -16,6 +49,7 @@ class EnvironmentConfig {
   final Duration timeout;
   final int maxRetries;
   final AuthType authType; // Tipo de autenticação
+  final List<HttpInterceptor> interceptors; // Lista de interceptores
 
   const EnvironmentConfig({
     required this.apiUrl,
@@ -27,6 +61,7 @@ class EnvironmentConfig {
     required this.timeout,
     required this.maxRetries,
     this.authType = AuthType.apiKey,
+    this.interceptors = const [],
   });
 }
 
@@ -61,6 +96,7 @@ class FailoverManager {
       timeout: Duration(seconds: 30),
       maxRetries: 3,
       authType: AuthType.apiKey,
+      interceptors: const [],
     ),
     Environment.development: EnvironmentConfig(
       apiUrl: 'https://api.dev.com',
@@ -72,6 +108,7 @@ class FailoverManager {
       timeout: Duration(seconds: 10),
       maxRetries: 1,
       authType: AuthType.apiKey,
+      interceptors: const [],
     ),
     Environment.staging: EnvironmentConfig(
       apiUrl: 'https://api.staging.com',
@@ -83,6 +120,7 @@ class FailoverManager {
       timeout: Duration(seconds: 20),
       maxRetries: 2,
       authType: AuthType.apiKey,
+      interceptors: const [],
     ),
   };
 
@@ -215,6 +253,54 @@ class FailoverManager {
     throw lastException ?? Exception('Todos os ambientes falharam');
   }
 
+  /// Executa interceptores antes da requisição
+  Future<void> _executeRequestInterceptors(
+    HttpClientRequest request,
+    EnvironmentConfig config,
+  ) async {
+    for (final interceptor in config.interceptors) {
+      try {
+        await interceptor.onRequest(request, config);
+      } catch (e) {
+        if (config.enableLogging) {
+          print('Erro no interceptor de requisição: $e');
+        }
+      }
+    }
+  }
+
+  /// Executa interceptores após a resposta
+  Future<void> _executeResponseInterceptors(
+    HttpClientResponse response,
+    EnvironmentConfig config,
+  ) async {
+    for (final interceptor in config.interceptors) {
+      try {
+        await interceptor.onResponse(response, config);
+      } catch (e) {
+        if (config.enableLogging) {
+          print('Erro no interceptor de resposta: $e');
+        }
+      }
+    }
+  }
+
+  /// Executa interceptores em caso de erro
+  Future<void> _executeErrorInterceptors(
+    Object error,
+    EnvironmentConfig config,
+  ) async {
+    for (final interceptor in config.interceptors) {
+      try {
+        await interceptor.onError(error, config);
+      } catch (e) {
+        if (config.enableLogging) {
+          print('Erro no interceptor de erro: $e');
+        }
+      }
+    }
+  }
+
   /// Verifica a saúde de todos os ambientes
   Future<Map<Environment, bool>> checkAllEnvironments() async {
     final results = <Environment, bool>{};
@@ -242,13 +328,22 @@ class FailoverManager {
       // Aplica autenticação baseada na configuração
       _applyAuthentication(request, config);
 
+      // Executa interceptores antes da requisição
+      await _executeRequestInterceptors(request, config);
+
       final response = await request.close().timeout(
         const Duration(seconds: 5),
       );
 
+      // Executa interceptores após a resposta
+      await _executeResponseInterceptors(response, config);
+
       client.close();
       return response.statusCode == 200;
     } catch (e) {
+      // Executa interceptores em caso de erro
+      final config = _configs[environment]!;
+      await _executeErrorInterceptors(e, config);
       print('Erro ao verificar saúde do ambiente $environment: $e');
       return false;
     }
@@ -371,7 +466,14 @@ class FailoverHelper {
           request.write(body.toString());
         }
 
+        // Executa interceptores antes da requisição
+        await _manager._executeRequestInterceptors(request, config);
+
         final response = await request.close();
+
+        // Executa interceptores após a resposta
+        await _manager._executeResponseInterceptors(response, config);
+
         client.close();
         return response;
       },
