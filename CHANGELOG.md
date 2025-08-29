@@ -7,6 +7,15 @@
 - Incluídos badges profissionais no README
 - Melhorada a apresentação visual do pacote
 - Adicionados assets ao pubspec.yaml
+- **NOVO:** Suporte para múltiplos tipos de autenticação
+- **NOVO:** Suporte para Firebase Token além de API Key
+- **NOVO:** Configuração flexível de autenticação por ambiente
+
+### Authentication
+- Suporte para API Key (`x-api-key` header)
+- Suporte para Firebase Token (`Authorization: Bearer` header)
+- Suporte para ambos os tipos com fallback automático
+- Configuração por ambiente (`AuthType.apiKey`, `AuthType.firebase`, `AuthType.both`)
 
 ### Visual
 - Logo com design de failover (setas e indicadores de ambiente)

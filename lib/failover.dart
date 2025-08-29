@@ -8,19 +8,30 @@ enum Environment { production, development, staging }
 class EnvironmentConfig {
   final String apiUrl;
   final String apiKey;
+  final String? firebaseToken; // Token Firebase opcional
   final bool enableLogging;
   final bool enableAnalytics;
   final Duration timeout;
   final int maxRetries;
+  final AuthType authType; // Tipo de autenticação
 
   const EnvironmentConfig({
     required this.apiUrl,
     required this.apiKey,
+    this.firebaseToken,
     required this.enableLogging,
     required this.enableAnalytics,
     required this.timeout,
     required this.maxRetries,
+    this.authType = AuthType.apiKey,
   });
+}
+
+/// Tipos de autenticação suportados
+enum AuthType {
+  apiKey, // Usa x-api-key header
+  firebase, // Usa Authorization: Bearer <token>
+  both, // Aceita ambos os tipos
 }
 
 /// Classe principal do sistema de failover
@@ -40,26 +51,32 @@ class FailoverManager {
     Environment.production: EnvironmentConfig(
       apiUrl: 'https://api.production.com',
       apiKey: 'prod_key_123',
+      firebaseToken: null,
       enableLogging: false,
       enableAnalytics: true,
       timeout: Duration(seconds: 30),
       maxRetries: 3,
+      authType: AuthType.apiKey,
     ),
     Environment.development: EnvironmentConfig(
       apiUrl: 'https://api.dev.com',
       apiKey: 'dev_key_456',
+      firebaseToken: null,
       enableLogging: true,
       enableAnalytics: false,
       timeout: Duration(seconds: 10),
       maxRetries: 1,
+      authType: AuthType.apiKey,
     ),
     Environment.staging: EnvironmentConfig(
       apiUrl: 'https://api.staging.com',
       apiKey: 'staging_key_789',
+      firebaseToken: null,
       enableLogging: true,
       enableAnalytics: true,
       timeout: Duration(seconds: 20),
       maxRetries: 2,
+      authType: AuthType.apiKey,
     ),
   };
 
@@ -215,7 +232,9 @@ class FailoverManager {
       final client = HttpClient();
 
       final request = await client.getUrl(Uri.parse('${config.apiUrl}/health'));
-      request.headers.set('Authorization', 'Bearer ${config.apiKey}');
+
+      // Aplica autenticação baseada na configuração
+      _applyAuthentication(request, config);
 
       final response = await request.close().timeout(
         const Duration(seconds: 5),
@@ -226,6 +245,37 @@ class FailoverManager {
     } catch (e) {
       print('Erro ao verificar saúde do ambiente $environment: $e');
       return false;
+    }
+  }
+
+  /// Aplica autenticação baseada na configuração
+  void _applyAuthentication(
+    HttpClientRequest request,
+    EnvironmentConfig config,
+  ) {
+    switch (config.authType) {
+      case AuthType.apiKey:
+        request.headers.set('x-api-key', config.apiKey);
+        break;
+      case AuthType.firebase:
+        if (config.firebaseToken != null) {
+          request.headers.set(
+            'Authorization',
+            'Bearer ${config.firebaseToken}',
+          );
+        }
+        break;
+      case AuthType.both:
+        // Tenta Firebase primeiro, depois API Key
+        if (config.firebaseToken != null) {
+          request.headers.set(
+            'Authorization',
+            'Bearer ${config.firebaseToken}',
+          );
+        } else {
+          request.headers.set('x-api-key', config.apiKey);
+        }
+        break;
     }
   }
 
@@ -301,7 +351,8 @@ class FailoverHelper {
             ? await client.putUrl(uri)
             : await client.deleteUrl(uri);
 
-        request.headers.set('Authorization', 'Bearer ${config.apiKey}');
+        // Aplica autenticação baseada no tipo configurado
+        _applyAuthentication(request, config);
         request.headers.set('Content-Type', 'application/json');
 
         if (headers != null) {
@@ -319,6 +370,37 @@ class FailoverHelper {
         return response;
       },
     );
+  }
+
+  /// Aplica autenticação baseada na configuração
+  static void _applyAuthentication(
+    HttpClientRequest request,
+    EnvironmentConfig config,
+  ) {
+    switch (config.authType) {
+      case AuthType.apiKey:
+        request.headers.set('x-api-key', config.apiKey);
+        break;
+      case AuthType.firebase:
+        if (config.firebaseToken != null) {
+          request.headers.set(
+            'Authorization',
+            'Bearer ${config.firebaseToken}',
+          );
+        }
+        break;
+      case AuthType.both:
+        // Tenta Firebase primeiro, depois API Key
+        if (config.firebaseToken != null) {
+          request.headers.set(
+            'Authorization',
+            'Bearer ${config.firebaseToken}',
+          );
+        } else {
+          request.headers.set('x-api-key', config.apiKey);
+        }
+        break;
+    }
   }
 
   /// Obtém o ambiente atual

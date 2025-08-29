@@ -61,20 +61,35 @@ final customConfigs = {
   Environment.production: EnvironmentConfig(
     apiUrl: 'https://api.meuapp.com',
     apiKey: 'minha_chave_producao',
+    firebaseToken: 'firebase_token_producao', // Opcional
     enableLogging: false,
     enableAnalytics: true,
     timeout: Duration(seconds: 30),
     maxRetries: 3,
+    authType: AuthType.both, // Aceita API Key e Firebase
   ),
   Environment.development: EnvironmentConfig(
     apiUrl: 'https://api-dev.meuapp.com',
     apiKey: 'minha_chave_desenvolvimento',
+    firebaseToken: null,
     enableLogging: true,
     enableAnalytics: false,
     timeout: Duration(seconds: 10),
     maxRetries: 1,
+    authType: AuthType.apiKey, // Só API Key
+  ),
+  Environment.staging: EnvironmentConfig(
+    apiUrl: 'https://api-staging.meuapp.com',
+    apiKey: 'minha_chave_staging',
+    firebaseToken: 'firebase_token_staging',
+    enableLogging: true,
+    enableAnalytics: true,
+    timeout: Duration(seconds: 20),
+    maxRetries: 2,
+    authType: AuthType.firebase, // Só Firebase
   ),
 };
+```
 
 await FailoverHelper.initialize(
   initialEnvironment: Environment.development,
@@ -194,12 +209,54 @@ print('Estatísticas: $stats');
 class EnvironmentConfig {
   final String apiUrl;        // URL base da API
   final String apiKey;        // Chave de autenticação
+  final String? firebaseToken; // Token Firebase (opcional)
   final bool enableLogging;   // Habilita logs
   final bool enableAnalytics; // Habilita analytics
   final Duration timeout;     // Timeout para requisições
   final int maxRetries;       // Número máximo de tentativas
+  final AuthType authType;    // Tipo de autenticação
 }
 ```
+
+### Tipos de Autenticação
+
+O sistema suporta **3 tipos de autenticação**:
+
+#### **1. API Key (`AuthType.apiKey`)**
+```dart
+// Usa header: x-api-key: sua_chave_aqui
+EnvironmentConfig(
+  apiKey: 'sua_api_key',
+  authType: AuthType.apiKey,
+)
+```
+
+#### **2. Firebase Token (`AuthType.firebase`)**
+```dart
+// Usa header: Authorization: Bearer seu_token_firebase
+EnvironmentConfig(
+  firebaseToken: 'seu_firebase_token',
+  authType: AuthType.firebase,
+)
+```
+
+#### **3. Ambos (`AuthType.both`)**
+```dart
+// Tenta Firebase primeiro, depois API Key
+EnvironmentConfig(
+  apiKey: 'sua_api_key',
+  firebaseToken: 'seu_firebase_token',
+  authType: AuthType.both,
+)
+```
+
+### Headers de Autenticação
+
+O sistema automaticamente aplica os headers corretos baseado na configuração:
+
+- **API Key:** `x-api-key: sua_chave`
+- **Firebase:** `Authorization: Bearer seu_token`
+- **Ambos:** Prioriza Firebase, fallback para API Key
 
 ### FailoverManager
 
