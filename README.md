@@ -62,6 +62,7 @@ final customConfigs = {
     apiUrl: 'https://api.meuapp.com',
     apiKey: 'minha_chave_producao',
     firebaseToken: 'firebase_token_producao', // Opcional
+    customAuthHeader: 'X-Custom-Auth', // Header personalizado
     enableLogging: false,
     enableAnalytics: true,
     timeout: Duration(seconds: 30),
@@ -72,6 +73,7 @@ final customConfigs = {
     apiUrl: 'https://api-dev.meuapp.com',
     apiKey: 'minha_chave_desenvolvimento',
     firebaseToken: null,
+    customAuthHeader: 'X-Dev-Key', // Header personalizado para dev
     enableLogging: true,
     enableAnalytics: false,
     timeout: Duration(seconds: 10),
@@ -82,6 +84,7 @@ final customConfigs = {
     apiUrl: 'https://api-staging.meuapp.com',
     apiKey: 'minha_chave_staging',
     firebaseToken: 'firebase_token_staging',
+    customAuthHeader: 'X-Staging-Token', // Header personalizado para staging
     enableLogging: true,
     enableAnalytics: true,
     timeout: Duration(seconds: 20),
@@ -210,6 +213,7 @@ class EnvironmentConfig {
   final String apiUrl;        // URL base da API
   final String apiKey;        // Chave de autenticação
   final String? firebaseToken; // Token Firebase (opcional)
+  final String? customAuthHeader; // Nome personalizado do header (opcional)
   final bool enableLogging;   // Habilita logs
   final bool enableAnalytics; // Habilita analytics
   final Duration timeout;     // Timeout para requisições
@@ -254,9 +258,34 @@ EnvironmentConfig(
 
 O sistema automaticamente aplica os headers corretos baseado na configuração:
 
+#### **Headers Padrão:**
 - **API Key:** `x-api-key: sua_chave`
 - **Firebase:** `Authorization: Bearer seu_token`
 - **Ambos:** Prioriza Firebase, fallback para API Key
+
+#### **Headers Personalizados:**
+Você pode definir nomes personalizados para os headers de autenticação:
+
+```dart
+EnvironmentConfig(
+  apiKey: 'sua_chave',
+  customAuthHeader: 'X-Custom-Auth', // Em vez de 'x-api-key'
+  authType: AuthType.apiKey,
+)
+
+EnvironmentConfig(
+  firebaseToken: 'seu_token',
+  customAuthHeader: 'X-Firebase-Token', // Em vez de 'Authorization'
+  authType: AuthType.firebase,
+)
+```
+
+#### **Exemplos de Headers Personalizados:**
+- `X-API-Key: sua_chave`
+- `X-Custom-Token: seu_token`
+- `X-Auth-Header: sua_chave`
+- `X-Service-Key: sua_chave`
+- `X-Client-Token: seu_token`
 
 ### FailoverManager
 

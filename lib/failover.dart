@@ -9,6 +9,8 @@ class EnvironmentConfig {
   final String apiUrl;
   final String apiKey;
   final String? firebaseToken; // Token Firebase opcional
+  final String?
+  customAuthHeader; // Nome personalizado do header de autenticação
   final bool enableLogging;
   final bool enableAnalytics;
   final Duration timeout;
@@ -19,6 +21,7 @@ class EnvironmentConfig {
     required this.apiUrl,
     required this.apiKey,
     this.firebaseToken,
+    this.customAuthHeader,
     required this.enableLogging,
     required this.enableAnalytics,
     required this.timeout,
@@ -52,6 +55,7 @@ class FailoverManager {
       apiUrl: 'https://api.production.com',
       apiKey: 'prod_key_123',
       firebaseToken: null,
+      customAuthHeader: null,
       enableLogging: false,
       enableAnalytics: true,
       timeout: Duration(seconds: 30),
@@ -62,6 +66,7 @@ class FailoverManager {
       apiUrl: 'https://api.dev.com',
       apiKey: 'dev_key_456',
       firebaseToken: null,
+      customAuthHeader: null,
       enableLogging: true,
       enableAnalytics: false,
       timeout: Duration(seconds: 10),
@@ -72,6 +77,7 @@ class FailoverManager {
       apiUrl: 'https://api.staging.com',
       apiKey: 'staging_key_789',
       firebaseToken: null,
+      customAuthHeader: null,
       enableLogging: true,
       enableAnalytics: true,
       timeout: Duration(seconds: 20),
@@ -255,25 +261,25 @@ class FailoverManager {
   ) {
     switch (config.authType) {
       case AuthType.apiKey:
-        request.headers.set('x-api-key', config.apiKey);
+        // Usa header personalizado se definido, senão usa 'x-api-key'
+        final headerName = config.customAuthHeader ?? 'x-api-key';
+        request.headers.set(headerName, config.apiKey);
         break;
       case AuthType.firebase:
         if (config.firebaseToken != null) {
-          request.headers.set(
-            'Authorization',
-            'Bearer ${config.firebaseToken}',
-          );
+          // Usa header personalizado se definido, senão usa 'Authorization'
+          final headerName = config.customAuthHeader ?? 'Authorization';
+          request.headers.set(headerName, 'Bearer ${config.firebaseToken}');
         }
         break;
       case AuthType.both:
         // Tenta Firebase primeiro, depois API Key
         if (config.firebaseToken != null) {
-          request.headers.set(
-            'Authorization',
-            'Bearer ${config.firebaseToken}',
-          );
+          final headerName = config.customAuthHeader ?? 'Authorization';
+          request.headers.set(headerName, 'Bearer ${config.firebaseToken}');
         } else {
-          request.headers.set('x-api-key', config.apiKey);
+          final headerName = config.customAuthHeader ?? 'x-api-key';
+          request.headers.set(headerName, config.apiKey);
         }
         break;
     }
@@ -379,25 +385,25 @@ class FailoverHelper {
   ) {
     switch (config.authType) {
       case AuthType.apiKey:
-        request.headers.set('x-api-key', config.apiKey);
+        // Usa header personalizado se definido, senão usa 'x-api-key'
+        final headerName = config.customAuthHeader ?? 'x-api-key';
+        request.headers.set(headerName, config.apiKey);
         break;
       case AuthType.firebase:
         if (config.firebaseToken != null) {
-          request.headers.set(
-            'Authorization',
-            'Bearer ${config.firebaseToken}',
-          );
+          // Usa header personalizado se definido, senão usa 'Authorization'
+          final headerName = config.customAuthHeader ?? 'Authorization';
+          request.headers.set(headerName, 'Bearer ${config.firebaseToken}');
         }
         break;
       case AuthType.both:
         // Tenta Firebase primeiro, depois API Key
         if (config.firebaseToken != null) {
-          request.headers.set(
-            'Authorization',
-            'Bearer ${config.firebaseToken}',
-          );
+          final headerName = config.customAuthHeader ?? 'Authorization';
+          request.headers.set(headerName, 'Bearer ${config.firebaseToken}');
         } else {
-          request.headers.set('x-api-key', config.apiKey);
+          final headerName = config.customAuthHeader ?? 'x-api-key';
+          request.headers.set(headerName, config.apiKey);
         }
         break;
     }

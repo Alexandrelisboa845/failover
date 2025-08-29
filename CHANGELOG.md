@@ -16,6 +16,8 @@
 - Suporte para Firebase Token (`Authorization: Bearer` header)
 - Suporte para ambos os tipos com fallback automático
 - Configuração por ambiente (`AuthType.apiKey`, `AuthType.firebase`, `AuthType.both`)
+- **NOVO:** Headers de autenticação personalizáveis
+- **NOVO:** Campo `customAuthHeader` para nomes personalizados
 
 ### Visual
 - Logo com design de failover (setas e indicadores de ambiente)
