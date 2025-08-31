@@ -24,8 +24,13 @@
 - ✅ **Fallback Automático**: Alternância automática entre ambientes em caso de falha
 - ✅ **Listeners**: Sistema de notificação para mudanças de ambiente
 - ✅ **HTTP Helper**: Utilitário para requisições HTTP com fallback automático
+- ✅ **Socket.IO em Tempo Real**: Comunicação bidirecional com reconexão automática
+- ✅ **Operações com Arquivos**: Upload/download com validação e fallback
+- ✅ **Múltiplos Tipos de Autenticação**: API Key, Firebase Token, Headers personalizados
+- ✅ **Interceptores HTTP**: Sistema extensível para lógica customizada
 - ✅ **Singleton Pattern**: Instância única para toda a aplicação
 - ✅ **Timeout Configurável**: Timeouts específicos para cada ambiente
+- ✅ **Validação de Arquivos**: Controle de tipo, tamanho e regras de negócio
 
 ## Instalação
 
@@ -33,7 +38,7 @@ Adicione a dependência ao seu `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  failover: ^0.0.1
+  failover: ^1.1.1
 ```
 
 ## Uso Básico
@@ -520,6 +525,56 @@ Quando você alterna de ambiente, o sistema:
 
 O sistema suporta **upload e download de arquivos** com fallback automático e validações:
 
+#### **Configurações Avançadas:**
+
+##### **1. Configuração por Ambiente:**
+```dart
+final configs = {
+  Environment.production: EnvironmentConfig(
+    apiUrl: 'https://api.production.com',
+    apiKey: 'prod_key',
+    maxFileSize: 100 * 1024 * 1024, // 100MB
+    allowedFileTypes: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'],
+    fileStoragePath: '/storage/production',
+  ),
+  Environment.development: EnvironmentConfig(
+    apiUrl: 'https://api.dev.com',
+    apiKey: 'dev_key',
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+    allowedFileTypes: ['pdf', 'txt', 'jpg', 'png'],
+    fileStoragePath: '/storage/development',
+  ),
+  Environment.staging: EnvironmentConfig(
+    apiUrl: 'https://api.staging.com',
+    apiKey: 'staging_key',
+    maxFileSize: 50 * 1024 * 1024, // 50MB
+    allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+    fileStoragePath: '/storage/staging',
+  ),
+};
+```
+
+##### **2. Validações Customizadas:**
+```dart
+// Antes do upload, valide regras de negócio
+Future<bool> validateFileForUpload(String filePath, String category) async {
+  final file = File(filePath);
+  final extension = path.extension(filePath).toLowerCase().replaceAll('.', '');
+  
+  // Validações específicas por categoria
+  switch (category) {
+    case 'documents':
+      return ['pdf', 'doc', 'docx'].contains(extension);
+    case 'images':
+      return ['jpg', 'jpeg', 'png', 'gif'].contains(extension);
+    case 'videos':
+      return ['mp4', 'avi', 'mov'].contains(extension);
+    default:
+      return false;
+  }
+}
+```
+
 #### **Upload Multipart:**
 ```dart
 // Upload básico multipart
@@ -575,6 +630,151 @@ EnvironmentConfig(
   allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
   fileStoragePath: '/storage/uploads',
 )
+```
+
+#### **Casos de Uso Práticos:**
+
+##### **1. Upload de Documentos Corporativos:**
+```dart
+try {
+  final response = await FailoverHelper.uploadFile(
+    endpoint: '/documents/upload',
+    filePath: '/documents/contrato_empresa.pdf',
+    fieldName: 'document',
+    additionalFields: {
+      'userId': '12345',
+      'category': 'contratos',
+      'priority': 'high',
+      'expiryDate': '2025-12-31',
+      'department': 'legal',
+    },
+  );
+  
+  print('✅ Documento enviado com sucesso!');
+  print('📄 Status: ${response.statusCode}');
+} catch (e) {
+  print('❌ Erro no upload: $e');
+}
+```
+
+##### **2. Upload de Imagens de Perfil:**
+```dart
+try {
+  final response = await FailoverHelper.uploadFile(
+    endpoint: '/profile/images/upload',
+    filePath: '/photos/user_profile.jpg',
+    fieldName: 'profileImage',
+    additionalFields: {
+      'userId': '12345',
+      'type': 'profile',
+      'description': 'Foto de perfil do usuário',
+      'isPublic': 'true',
+    },
+  );
+  
+  print('✅ Imagem de perfil enviada!');
+} catch (e) {
+  print('❌ Erro no upload da imagem: $e');
+}
+```
+
+##### **3. Download de Relatórios:**
+```dart
+try {
+  final localPath = await FailoverHelper.downloadFileToPath(
+    endpoint: '/reports/monthly/2024-12',
+    localPath: '/downloads/report_${DateTime.now().millisecondsSinceEpoch}.pdf',
+  );
+  
+  print('✅ Relatório baixado com sucesso!');
+  print('📁 Local: $localPath');
+} catch (e) {
+  print('❌ Erro no download: $e');
+}
+```
+
+##### **4. Upload em Lote:**
+```dart
+final files = [
+  '/documents/doc1.pdf',
+  '/documents/doc2.pdf',
+  '/documents/doc3.pdf',
+];
+
+for (final filePath in files) {
+  try {
+    await FailoverHelper.uploadFile(
+      endpoint: '/documents/batch-upload',
+      filePath: filePath,
+      fieldName: 'documents',
+      additionalFields: {
+        'batchId': 'batch_${DateTime.now().millisecondsSinceEpoch}',
+        'totalFiles': files.length.toString(),
+      },
+    );
+    
+    print('✅ $filePath enviado com sucesso!');
+  } catch (e) {
+    print('❌ Erro ao enviar $filePath: $e');
+  }
+}
+```
+
+#### **Tratamento de Erros e Boas Práticas:**
+
+##### **1. Validação de Arquivos:**
+```dart
+// Sempre valide antes do upload
+final file = File(filePath);
+if (!await file.exists()) {
+  print('❌ Arquivo não encontrado: $filePath');
+  return;
+}
+
+final fileSize = await file.length();
+if (fileSize > 50 * 1024 * 1024) { // 50MB
+  print('❌ Arquivo muito grande: ${(fileSize / 1024 / 1024).toStringAsFixed(2)}MB');
+  return;
+}
+```
+
+##### **2. Tratamento de Exceções:**
+```dart
+try {
+  final response = await FailoverHelper.uploadFile(
+    endpoint: '/upload',
+    filePath: filePath,
+    fieldName: 'file',
+  );
+  
+  if (response.statusCode == 200) {
+    print('✅ Upload realizado com sucesso!');
+  } else {
+    print('⚠️ Upload realizado, mas com status: ${response.statusCode}');
+  }
+} on FileSystemException catch (e) {
+  print('❌ Erro de arquivo: $e');
+} on ArgumentError catch (e) {
+  print('❌ Erro de validação: $e');
+} catch (e) {
+  print('❌ Erro inesperado: $e');
+}
+```
+
+##### **3. Monitoramento de Progresso:**
+```dart
+// Para arquivos grandes, considere implementar progresso
+final file = File(filePath);
+final totalSize = await file.length();
+var uploadedSize = 0;
+
+// Simula progresso (em implementação real, use streams)
+print('📤 Iniciando upload...');
+print('📊 Tamanho total: ${(totalSize / 1024 / 1024).toStringAsFixed(2)}MB');
+
+// ... upload ...
+
+print('✅ Upload concluído!');
 ```
 
 ### FailoverManager
@@ -805,6 +1005,24 @@ class _FailoverDemoPageState extends State<FailoverDemoPage> {
   }
 }
 ```
+
+## Roadmap
+
+### 🚀 **Próximas Funcionalidades:**
+
+- 🔄 **Stream de Arquivos**: Upload/download em chunks para arquivos muito grandes
+- 📊 **Métricas Avançadas**: Dashboard de performance e uso
+- 🔐 **Criptografia**: Criptografia automática de arquivos sensíveis
+- 🌐 **CDN Integration**: Suporte para CDNs com fallback
+- 📱 **Mobile Optimizations**: Otimizações específicas para dispositivos móveis
+- 🔍 **Cache Inteligente**: Sistema de cache com invalidação automática
+- 📈 **Analytics Avançados**: Métricas detalhadas de uso e performance
+
+### 🎯 **Funcionalidades em Desenvolvimento:**
+
+- 🔄 **WebSocket Nativo**: Suporte para WebSocket puro além do Socket.IO
+- 📁 **Sincronização de Arquivos**: Sincronização bidirecional com servidor
+- 🚀 **Compressão Automática**: Compressão inteligente de arquivos
 
 ## Contribuição
 

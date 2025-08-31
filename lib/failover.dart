@@ -779,20 +779,27 @@ class FailoverHelper {
         if (!await file.exists()) {
           throw FileSystemException('Arquivo não encontrado', filePath);
         }
-        
+
         final fileSize = await file.length();
         if (fileSize > config.maxFileSize) {
-          throw ArgumentError('Arquivo muito grande: ${fileSize} bytes (máximo: ${config.maxFileSize} bytes)');
+          throw ArgumentError(
+            'Arquivo muito grande: ${fileSize} bytes (máximo: ${config.maxFileSize} bytes)',
+          );
         }
-        
-        final extension = path.extension(filePath).toLowerCase().replaceAll('.', '');
+
+        final extension = path
+            .extension(filePath)
+            .toLowerCase()
+            .replaceAll('.', '');
         if (!config.allowedFileTypes.contains(extension)) {
-          throw ArgumentError('Tipo de arquivo não permitido: $extension (permitidos: ${config.allowedFileTypes.join(', ')})');
+          throw ArgumentError(
+            'Tipo de arquivo não permitido: $extension (permitidos: ${config.allowedFileTypes.join(', ')})',
+          );
         }
-        
+
         // Lê o arquivo
         final bytes = await file.readAsBytes();
-        
+
         // Prepara campos adicionais
         final fields = <String, String>{
           'filename': path.basename(filePath),
@@ -800,7 +807,7 @@ class FailoverHelper {
           'type': extension,
           ...?additionalFields,
         };
-        
+
         // Executa upload multipart
         return await multipartUpload(
           endpoint: endpoint,
@@ -822,17 +829,17 @@ class FailoverHelper {
     return await _manager.executeWithFallback(
       operation: (config) async {
         final bytes = await downloadFile(endpoint: endpoint, headers: headers);
-        
+
         // Cria diretório se não existir
         final file = File(localPath);
         final directory = file.parent;
         if (!await directory.exists()) {
           await directory.create(recursive: true);
         }
-        
+
         // Escreve o arquivo
         await file.writeAsBytes(bytes);
-        
+
         return localPath;
       },
     );
