@@ -35,6 +35,15 @@
 - **NOVO:** Reconexão automática em caso de falha
 - **NOVO:** Configurações personalizáveis por ambiente
 
+### Operações com Arquivos
+- **NOVO:** Upload multipart nativo com fallback automático
+- **NOVO:** Upload de arquivo com validação automática
+- **NOVO:** Download de arquivo como bytes
+- **NOVO:** Download de arquivo para caminho local
+- **NOVO:** Validação de tamanho e tipo de arquivo
+- **NOVO:** Criação automática de diretórios
+- **NOVO:** Integração com interceptores HTTP
+
 ### Visual
 - Logo com design de failover (setas e indicadores de ambiente)
 - Badges para versão, Flutter, licença e status do pub.dev

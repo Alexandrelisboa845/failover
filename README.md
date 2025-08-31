@@ -516,6 +516,67 @@ Quando você alterna de ambiente, o sistema:
 2. **Conecta** ao novo ambiente (se suportar Socket.IO)
 3. **Mantém** todos os listeners configurados
 
+### 11. Operações com Arquivos
+
+O sistema suporta **upload e download de arquivos** com fallback automático e validações:
+
+#### **Upload Multipart:**
+```dart
+// Upload básico multipart
+final response = await FailoverHelper.multipartUpload(
+  endpoint: '/upload',
+  fields: {
+    'description': 'Meu arquivo',
+    'category': 'documentos',
+  },
+  files: {
+    'file': fileBytes, // List<int>
+  },
+);
+
+// Upload de arquivo com validação automática
+final response = await FailoverHelper.uploadFile(
+  endpoint: '/upload',
+  filePath: '/path/to/document.pdf',
+  fieldName: 'document',
+  additionalFields: {
+    'description': 'Documento importante',
+    'priority': 'high',
+  },
+);
+```
+
+#### **Download de Arquivos:**
+```dart
+// Download como bytes
+final bytes = await FailoverHelper.downloadFile(
+  endpoint: '/files/document.pdf',
+);
+
+// Download para caminho local
+final localPath = await FailoverHelper.downloadFileToPath(
+  endpoint: '/files/document.pdf',
+  localPath: '/downloads/document.pdf',
+);
+```
+
+#### **Validações Automáticas:**
+- **Tamanho máximo** configurável por ambiente
+- **Tipos de arquivo** permitidos
+- **Existência do arquivo** local
+- **Criação automática** de diretórios
+
+#### **Configurações de Arquivo:**
+```dart
+EnvironmentConfig(
+  apiUrl: 'https://api.meuapp.com',
+  apiKey: 'minha_chave',
+  maxFileSize: 50 * 1024 * 1024, // 50MB
+  allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+  fileStoragePath: '/storage/uploads',
+)
+```
+
 ### FailoverManager
 
 - `initialize()`: Inicializa o sistema
@@ -540,6 +601,10 @@ Quando você alterna de ambiente, o sistema:
 - **`emitSocketEvent()`**: Emite eventos
 - **`onSocketEvent()`**: Escuta eventos
 - **`isSocketConnected`**: Status da conexão
+- **`multipartUpload()`**: Upload multipart com fallback
+- **`uploadFile()`**: Upload de arquivo com validação
+- **`downloadFile()`**: Download de arquivo como bytes
+- **`downloadFileToPath()`**: Download de arquivo para caminho local
 
 ## Exemplo Completo
 

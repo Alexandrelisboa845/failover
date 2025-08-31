@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:path/path.dart' as path;
 
 /// Interceptor para requisições HTTP
 abstract class HttpInterceptor {
@@ -635,6 +636,204 @@ class FailoverHelper {
 
         client.close();
         return response;
+      },
+    );
+  }
+
+  /// Executa upload multipart com fallback automático
+  static Future<HttpClientResponse> multipartUpload({
+    required String endpoint,
+    required Map<String, String> fields,
+    required Map<String, List<int>> files,
+    Map<String, String>? headers,
+    String method = 'POST',
+  }) async {
+    return await _manager.executeWithFallback(
+      operation: (config) async {
+        final client = HttpClient();
+        final uri = Uri.parse('${config.apiUrl}$endpoint');
+
+        final request = method == 'POST'
+            ? await client.postUrl(uri)
+            : method == 'PUT'
+            ? await client.putUrl(uri)
+            : await client.postUrl(uri);
+
+        // Aplica autenticação baseada no tipo configurado
+        _applyAuthentication(request, config);
+
+        // Gera boundary único para multipart
+        final boundary =
+            '----failover-${DateTime.now().millisecondsSinceEpoch}';
+        request.headers.set(
+          'Content-Type',
+          'multipart/form-data; boundary=$boundary',
+        );
+
+        if (headers != null) {
+          headers.forEach((key, value) {
+            request.headers.set(key, value);
+          });
+        }
+
+        // Constrói o corpo multipart
+        final buffer = StringBuffer();
+
+        // Adiciona campos de texto
+        for (final entry in fields.entries) {
+          buffer.write('--$boundary\r\n');
+          buffer.write(
+            'Content-Disposition: form-data; name="${entry.key}"\r\n\r\n',
+          );
+          buffer.write('${entry.value}\r\n');
+        }
+
+        // Adiciona arquivos
+        for (final entry in files.entries) {
+          buffer.write('--$boundary\r\n');
+          buffer.write(
+            'Content-Disposition: form-data; name="${entry.key}"; filename="${entry.key}"\r\n',
+          );
+          buffer.write('Content-Type: application/octet-stream\r\n\r\n');
+
+          // Escreve o arquivo
+          request.write(buffer.toString());
+          request.add(entry.value);
+          buffer.clear();
+
+          buffer.write('\r\n');
+        }
+
+        // Finaliza o multipart
+        buffer.write('--$boundary--\r\n');
+        request.write(buffer.toString());
+
+        // Executa interceptores antes da requisição
+        await _manager._executeRequestInterceptors(request, config);
+
+        final response = await request.close();
+
+        // Executa interceptores após a resposta
+        await _manager._executeResponseInterceptors(response, config);
+
+        client.close();
+        return response;
+      },
+    );
+  }
+
+  /// Executa download de arquivo com fallback automático
+  static Future<List<int>> downloadFile({
+    required String endpoint,
+    Map<String, String>? headers,
+  }) async {
+    return await _manager.executeWithFallback(
+      operation: (config) async {
+        final client = HttpClient();
+        final uri = Uri.parse('${config.apiUrl}$endpoint');
+
+        final request = await client.getUrl(uri);
+
+        // Aplica autenticação baseada no tipo configurado
+        _applyAuthentication(request, config);
+
+        if (headers != null) {
+          headers.forEach((key, value) {
+            request.headers.set(key, value);
+          });
+        }
+
+        // Executa interceptores antes da requisição
+        await _manager._executeRequestInterceptors(request, config);
+
+        final response = await request.close();
+
+        // Executa interceptores após a resposta
+        await _manager._executeResponseInterceptors(response, config);
+
+        // Lê o arquivo
+        final bytes = <int>[];
+        await for (final chunk in response) {
+          bytes.addAll(chunk);
+        }
+
+        client.close();
+        return bytes;
+      },
+    );
+  }
+
+  /// Upload de arquivo com validação e fallback
+  static Future<HttpClientResponse> uploadFile({
+    required String endpoint,
+    required String filePath,
+    required String fieldName,
+    Map<String, String>? additionalFields,
+    Map<String, String>? headers,
+    String method = 'POST',
+  }) async {
+    return await _manager.executeWithFallback(
+      operation: (config) async {
+        // Valida o arquivo
+        final file = File(filePath);
+        if (!await file.exists()) {
+          throw FileSystemException('Arquivo não encontrado', filePath);
+        }
+        
+        final fileSize = await file.length();
+        if (fileSize > config.maxFileSize) {
+          throw ArgumentError('Arquivo muito grande: ${fileSize} bytes (máximo: ${config.maxFileSize} bytes)');
+        }
+        
+        final extension = path.extension(filePath).toLowerCase().replaceAll('.', '');
+        if (!config.allowedFileTypes.contains(extension)) {
+          throw ArgumentError('Tipo de arquivo não permitido: $extension (permitidos: ${config.allowedFileTypes.join(', ')})');
+        }
+        
+        // Lê o arquivo
+        final bytes = await file.readAsBytes();
+        
+        // Prepara campos adicionais
+        final fields = <String, String>{
+          'filename': path.basename(filePath),
+          'size': fileSize.toString(),
+          'type': extension,
+          ...?additionalFields,
+        };
+        
+        // Executa upload multipart
+        return await multipartUpload(
+          endpoint: endpoint,
+          fields: fields,
+          files: {fieldName: bytes},
+          headers: headers,
+          method: method,
+        );
+      },
+    );
+  }
+
+  /// Download de arquivo para caminho local
+  static Future<String> downloadFileToPath({
+    required String endpoint,
+    required String localPath,
+    Map<String, String>? headers,
+  }) async {
+    return await _manager.executeWithFallback(
+      operation: (config) async {
+        final bytes = await downloadFile(endpoint: endpoint, headers: headers);
+        
+        // Cria diretório se não existir
+        final file = File(localPath);
+        final directory = file.parent;
+        if (!await directory.exists()) {
+          await directory.create(recursive: true);
+        }
+        
+        // Escreve o arquivo
+        await file.writeAsBytes(bytes);
+        
+        return localPath;
       },
     );
   }
