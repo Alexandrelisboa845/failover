@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:convert';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'package:path/path.dart' as path;
-import 'package:file/file.dart' as file;
 
 /// Interceptor para requisições HTTP
 abstract class HttpInterceptor {
@@ -131,7 +128,7 @@ class FailoverManager {
       timeout: Duration(seconds: 30),
       maxRetries: 3,
       authType: AuthType.apiKey,
-      interceptors: const [],
+      interceptors: [],
       socketUrl: 'wss://socket.production.com',
       enableSocketIO: true,
       fileStoragePath: '/storage/production',
@@ -147,7 +144,7 @@ class FailoverManager {
       timeout: Duration(seconds: 10),
       maxRetries: 1,
       authType: AuthType.apiKey,
-      interceptors: const [],
+      interceptors: [],
       socketUrl: 'ws://localhost:3000',
       enableSocketIO: true,
       fileStoragePath: '/storage/development',
@@ -163,7 +160,7 @@ class FailoverManager {
       timeout: Duration(seconds: 20),
       maxRetries: 2,
       authType: AuthType.apiKey,
-      interceptors: const [],
+      interceptors: [],
       socketUrl: 'wss://socket.staging.com',
       enableSocketIO: true,
       fileStoragePath: '/storage/staging',
