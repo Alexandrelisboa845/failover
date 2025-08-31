@@ -1,5 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:path/path.dart' as path;
+import 'package:file/file.dart' as file;
 
 /// Interceptor para requisições HTTP
 abstract class HttpInterceptor {
@@ -51,6 +55,16 @@ class EnvironmentConfig {
   final AuthType authType; // Tipo de autenticação
   final List<HttpInterceptor> interceptors; // Lista de interceptores
 
+  // Configurações de Socket.IO
+  final String? socketUrl; // URL do Socket.IO (opcional)
+  final Map<String, dynamic>? socketOptions; // Opções do Socket.IO
+  final bool enableSocketIO; // Habilita Socket.IO
+
+  // Configurações de arquivos
+  final String? fileStoragePath; // Caminho para armazenamento de arquivos
+  final int maxFileSize; // Tamanho máximo de arquivo em bytes
+  final List<String> allowedFileTypes; // Tipos de arquivo permitidos
+
   const EnvironmentConfig({
     required this.apiUrl,
     required this.apiKey,
@@ -62,6 +76,21 @@ class EnvironmentConfig {
     required this.maxRetries,
     this.authType = AuthType.apiKey,
     this.interceptors = const [],
+    this.socketUrl,
+    this.socketOptions,
+    this.enableSocketIO = false,
+    this.fileStoragePath,
+    this.maxFileSize = 10 * 1024 * 1024, // 10MB padrão
+    this.allowedFileTypes = const [
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'pdf',
+      'txt',
+      'doc',
+      'docx',
+    ],
   });
 }
 
@@ -84,6 +113,12 @@ class FailoverManager {
   Timer? _healthCheckTimer;
   bool _isInitialized = false;
 
+  // Socket.IO
+  IO.Socket? _socket;
+  bool _isSocketConnected = false;
+
+  // File operations - será implementado posteriormente
+
   /// Configurações padrão para cada ambiente
   static const Map<Environment, EnvironmentConfig> _defaultConfigs = {
     Environment.production: EnvironmentConfig(
@@ -97,6 +132,10 @@ class FailoverManager {
       maxRetries: 3,
       authType: AuthType.apiKey,
       interceptors: const [],
+      socketUrl: 'wss://socket.production.com',
+      enableSocketIO: true,
+      fileStoragePath: '/storage/production',
+      maxFileSize: 50 * 1024 * 1024, // 50MB
     ),
     Environment.development: EnvironmentConfig(
       apiUrl: 'https://api.dev.com',
@@ -109,6 +148,10 @@ class FailoverManager {
       maxRetries: 1,
       authType: AuthType.apiKey,
       interceptors: const [],
+      socketUrl: 'ws://localhost:3000',
+      enableSocketIO: true,
+      fileStoragePath: '/storage/development',
+      maxFileSize: 10 * 1024 * 1024, // 10MB
     ),
     Environment.staging: EnvironmentConfig(
       apiUrl: 'https://api.staging.com',
@@ -121,6 +164,10 @@ class FailoverManager {
       maxRetries: 2,
       authType: AuthType.apiKey,
       interceptors: const [],
+      socketUrl: 'wss://socket.staging.com',
+      enableSocketIO: true,
+      fileStoragePath: '/storage/staging',
+      maxFileSize: 25 * 1024 * 1024, // 25MB
     ),
   };
 
@@ -142,6 +189,11 @@ class FailoverManager {
     if (enableHealthCheck) {
       await _performHealthCheck();
       _startHealthCheckTimer();
+    }
+
+    // Conecta ao Socket.IO se habilitado
+    if (_configs[_currentEnvironment]?.enableSocketIO == true) {
+      await connectSocket();
     }
 
     _isInitialized = true;
@@ -196,6 +248,14 @@ class FailoverManager {
     }
 
     print('Ambiente alterado de $oldEnvironment para $newEnvironment');
+
+    // Reconecta ao Socket.IO se o novo ambiente suportar
+    if (_configs[newEnvironment]?.enableSocketIO == true) {
+      await connectSocket();
+    } else {
+      _disconnectSocket();
+    }
+
     return true;
   }
 
@@ -394,6 +454,9 @@ class FailoverManager {
     _healthCheckTimer?.cancel();
     _listeners.clear();
     _isInitialized = false;
+
+    // Desconecta Socket.IO
+    _disconnectSocket();
   }
 
   /// Reseta o manager para estado inicial (útil para testes)
@@ -403,6 +466,102 @@ class FailoverManager {
     _currentEnvironment = Environment.development;
   }
 
+  /// Conecta ao Socket.IO do ambiente atual
+  Future<bool> connectSocket() async {
+    if (!_isInitialized) return false;
+
+    final config = _configs[_currentEnvironment]!;
+    if (!config.enableSocketIO || config.socketUrl == null) return false;
+
+    try {
+      _disconnectSocket();
+
+      _socket = IO.io(config.socketUrl!, {
+        'transports': ['websocket'],
+        'autoConnect': true,
+        'reconnection': true,
+        'reconnectionDelay': 1000,
+        'reconnectionAttempts': 5,
+        ...?config.socketOptions,
+      });
+
+      _socket!.onConnect((_) {
+        _isSocketConnected = true;
+        if (config.enableLogging) {
+          print('🔌 Socket.IO conectado: ${config.socketUrl}');
+        }
+      });
+
+      _socket!.onDisconnect((_) {
+        _isSocketConnected = false;
+        if (config.enableLogging) {
+          print('🔌 Socket.IO desconectado: ${config.socketUrl}');
+        }
+      });
+
+      _socket!.onError((error) {
+        if (config.enableLogging) {
+          print('❌ Erro no Socket.IO: $error');
+        }
+      });
+
+      return true;
+    } catch (e) {
+      if (config.enableLogging) {
+        print('❌ Erro ao conectar Socket.IO: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Desconecta do Socket.IO
+  void _disconnectSocket() {
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
+    _isSocketConnected = false;
+  }
+
+  /// Emite um evento via Socket.IO
+  Future<bool> emitSocketEvent(String event, dynamic data) async {
+    if (!_isSocketConnected || _socket == null) return false;
+
+    try {
+      _socket!.emit(event, data);
+      return true;
+    } catch (e) {
+      final config = _configs[_currentEnvironment]!;
+      if (config.enableLogging) {
+        print('❌ Erro ao emitir evento Socket.IO: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Escuta um evento do Socket.IO
+  void onSocketEvent(String event, Function(dynamic) callback) {
+    if (_socket == null) return;
+
+    _socket!.on(event, callback);
+  }
+
+  /// Remove listener de um evento do Socket.IO
+  void offSocketEvent(String event, [Function(dynamic)? callback]) {
+    if (_socket == null) return;
+
+    if (callback != null) {
+      _socket!.off(event, callback);
+    } else {
+      _socket!.off(event);
+    }
+  }
+
+  /// Verifica se o Socket.IO está conectado
+  bool get isSocketConnected => _isSocketConnected;
+
+  /// Obtém a instância do Socket.IO
+  IO.Socket? get socket => _socket;
+
   /// Obtém estatísticas do sistema
   Map<String, dynamic> getStats() {
     return {
@@ -411,6 +570,9 @@ class FailoverManager {
       'totalConfigs': _configs.length,
       'totalListeners': _listeners.length,
       'healthCheckActive': _healthCheckTimer?.isActive ?? false,
+      'socketConnected': _isSocketConnected,
+      'socketUrl': _configs[_currentEnvironment]?.socketUrl,
+      'socketIOEnabled': _configs[_currentEnvironment]?.enableSocketIO ?? false,
     };
   }
 }
@@ -538,6 +700,23 @@ class FailoverHelper {
 
   /// Libera recursos
   static void dispose() => _manager.dispose();
+
+  /// Socket.IO Methods
+  static Future<bool> connectSocket() => _manager.connectSocket();
+  static bool get isSocketConnected => _manager.isSocketConnected;
+  static IO.Socket? get socket => _manager.socket;
+
+  /// Emite evento via Socket.IO
+  static Future<bool> emitSocketEvent(String event, dynamic data) =>
+      _manager.emitSocketEvent(event, data);
+
+  /// Escuta evento do Socket.IO
+  static void onSocketEvent(String event, Function(dynamic) callback) =>
+      _manager.onSocketEvent(event, callback);
+
+  /// Remove listener de evento do Socket.IO
+  static void offSocketEvent(String event, [Function(dynamic)? callback]) =>
+      _manager.offSocketEvent(event, callback);
 
   /// Reseta o manager (útil para testes)
   static void reset() => _manager.reset();

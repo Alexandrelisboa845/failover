@@ -27,6 +27,14 @@
 - **NOVO:** Suporte para múltiplos interceptores por ambiente
 - **NOVO:** Interceptores de exemplo: Logging, Métricas, Cache
 
+### Socket.IO
+- **NOVO:** Suporte completo para Socket.IO em tempo real
+- **NOVO:** Conexão automática ao Socket.IO por ambiente
+- **NOVO:** Fallback automático de Socket.IO entre ambientes
+- **NOVO:** Métodos para emitir e escutar eventos
+- **NOVO:** Reconexão automática em caso de falha
+- **NOVO:** Configurações personalizáveis por ambiente
+
 ### Visual
 - Logo com design de failover (setas e indicadores de ambiente)
 - Badges para versão, Flutter, licença e status do pub.dev

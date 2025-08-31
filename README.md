@@ -463,6 +463,59 @@ EnvironmentConfig(
 - `X-Service-Key: sua_chave`
 - `X-Client-Token: seu_token`
 
+### 10. Socket.IO em Tempo Real
+
+O sistema suporta **conexões Socket.IO** para comunicação em tempo real com fallback automático:
+
+#### **Configuração de Socket.IO:**
+```dart
+EnvironmentConfig(
+  apiUrl: 'https://api.meuapp.com',
+  apiKey: 'minha_chave',
+  socketUrl: 'wss://socket.meuapp.com',
+  enableSocketIO: true,
+  socketOptions: {
+    'transports': ['websocket'],
+    'reconnection': true,
+    'reconnectionDelay': 1000,
+  },
+)
+```
+
+#### **Uso Básico:**
+```dart
+// Conecta automaticamente ao Socket.IO
+await FailoverHelper.initialize(
+  initialEnvironment: Environment.development,
+);
+
+// Emite eventos
+await FailoverHelper.emitSocketEvent('user:join', {
+  'userId': '123',
+  'room': 'chat',
+});
+
+// Escuta eventos
+FailoverHelper.onSocketEvent('message:new', (data) {
+  print('Nova mensagem: $data');
+});
+
+// Remove listener
+FailoverHelper.offSocketEvent('message:new');
+```
+
+#### **Eventos Automáticos:**
+- **`connect`**: Conectado ao Socket.IO
+- **`disconnect`**: Desconectado do Socket.IO
+- **`error`**: Erro na conexão
+- **Reconexão automática** em caso de falha
+
+#### **Fallback Automático:**
+Quando você alterna de ambiente, o sistema:
+1. **Desconecta** do Socket.IO atual
+2. **Conecta** ao novo ambiente (se suportar Socket.IO)
+3. **Mantém** todos os listeners configurados
+
 ### FailoverManager
 
 - `initialize()`: Inicializa o sistema
@@ -471,6 +524,10 @@ EnvironmentConfig(
 - `checkAllEnvironments()`: Verifica saúde de todos os ambientes
 - `addListener()`: Adiciona listener para mudanças
 - `getStats()`: Obtém estatísticas do sistema
+- **`connectSocket()`**: Conecta ao Socket.IO
+- **`emitSocketEvent()`**: Emite eventos
+- **`onSocketEvent()`**: Escuta eventos
+- **`isSocketConnected`**: Status da conexão
 
 ### FailoverHelper
 
@@ -479,6 +536,10 @@ EnvironmentConfig(
 - `switchTo()`: Alternância de ambiente
 - `onEnvironmentChanged()`: Adiciona listener
 - `getStats()`: Estatísticas do sistema
+- **`connectSocket()`**: Conecta ao Socket.IO
+- **`emitSocketEvent()`**: Emite eventos
+- **`onSocketEvent()`**: Escuta eventos
+- **`isSocketConnected`**: Status da conexão
 
 ## Exemplo Completo
 
@@ -503,6 +564,8 @@ void main() async {
         timeout: Duration(seconds: 30),
         maxRetries: 3,
         authType: AuthType.both,
+        socketUrl: 'wss://socket.meuapp.com',
+        enableSocketIO: true,
       ),
       Environment.development: EnvironmentConfig(
         apiUrl: 'https://api-dev.meuapp.com',
@@ -513,6 +576,8 @@ void main() async {
         timeout: Duration(seconds: 10),
         maxRetries: 1,
         authType: AuthType.apiKey,
+        socketUrl: 'ws://localhost:3000',
+        enableSocketIO: true,
       ),
       Environment.staging: EnvironmentConfig(
         apiUrl: 'https://api-staging.meuapp.com',
@@ -524,6 +589,8 @@ void main() async {
         timeout: Duration(seconds: 20),
         maxRetries: 2,
         authType: AuthType.firebase,
+        socketUrl: 'wss://socket-staging.meuapp.com',
+        enableSocketIO: true,
       ),
     },
   );
@@ -531,6 +598,15 @@ void main() async {
   // Adiciona listener para mudanças de ambiente
   FailoverHelper.onEnvironmentChanged((Environment env) {
     print('Ambiente alterado para: $env');
+  });
+  
+  // Configura Socket.IO para chat em tempo real
+  FailoverHelper.onSocketEvent('message:new', (data) {
+    print('Nova mensagem recebida: $data');
+  });
+  
+  FailoverHelper.onSocketEvent('user:joined', (data) {
+    print('Usuário entrou: ${data['username']}');
   });
   
   runApp(MyApp());
