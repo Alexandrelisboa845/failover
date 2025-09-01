@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.1.2
+### Bug Fixes
+- **CORRIGIDO:** Removido padrão singleton do FailoverManager para permitir múltiplas instâncias independentes
+- **CORRIGIDO:** Método reset() agora limpa corretamente o estado das instâncias
+- **CORRIGIDO:** Testes de múltiplas instâncias agora funcionam corretamente
+- **CORRIGIDO:** Alternância de ambientes independente entre instâncias
+- **CORRIGIDO:** Cada instância mantém suas próprias configurações (URLs, API Keys, Socket URLs)
+
+### Improvements
+- **MELHORADO:** Testes de múltiplas instâncias com 27 testes passando
+- **MELHORADO:** Verificação de URLs únicas por instância
+- **MELHORADO:** Fallback independente para cada backend
+- **MELHORADO:** Listeners independentes por instância
+- **MELHORADO:** Estatísticas consolidadas de todas as instâncias
+
+### Testing
+- **NOVO:** Testes abrangentes para múltiplas instâncias
+- **NOVO:** Verificação de isolamento entre instâncias
+- **NOVO:** Testes de alternância de ambientes independente
+- **NOVO:** Testes de Socket.IO por instância
+- **NOVO:** Testes de HTTP requests por instância
+
+## 1.1.1
+### Features
+- Corrigidos warnings de linting e otimizado código
+- Atualização de dependências (socket_io_client para ^3.0.2)
+
+## 1.1.0
+### Features
+- Suporte completo para Socket.IO em tempo real
+- Conexão automática ao Socket.IO por ambiente
+- Fallback automático de Socket.IO entre ambientes
+- Métodos para emitir e escutar eventos
+- Reconexão automática em caso de falha
+- Configurações personalizáveis por ambiente
+- Upload multipart nativo com fallback automático
+- Upload de arquivo com validação automática
+- Download de arquivo como bytes
+- Download de arquivo para caminho local
+- Validação de tamanho e tipo de arquivo
+- Criação automática de diretórios
+- Integração com interceptores HTTP
+
+## 1.0.3
+### Features
+- Headers de autenticação personalizáveis
+- Campo `customAuthHeader` para nomes personalizados
+- Sistema completo de interceptores HTTP
+- Interceptores antes da requisição (`onRequest`)
+- Interceptores após a resposta (`onResponse`)
+- Interceptores em caso de erro (`onError`)
+- Suporte para múltiplos interceptores por ambiente
+- Interceptores de exemplo: Logging, Métricas, Cache
+
 ## 1.0.1
 
 ### Features
