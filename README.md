@@ -777,6 +777,207 @@ print('📊 Tamanho total: ${(totalSize / 1024 / 1024).toStringAsFixed(2)}MB');
 print('✅ Upload concluído!');
 ```
 
+### 12. Múltiplas Instâncias para Diferentes Backends
+
+O sistema suporta **múltiplas instâncias independentes** para gerenciar diferentes backends (ex: backend geral + carteira digital):
+
+#### **Criação de Instâncias:**
+```dart
+// Inicializa instância padrão
+await FailoverHelper.initialize(
+  initialEnvironment: Environment.production,
+);
+
+// Cria instância para backend geral
+await FailoverHelper.createInstance(
+  instanceName: 'general',
+  initialEnvironment: Environment.production,
+  customConfigs: {
+    Environment.production: EnvironmentConfig(
+      apiUrl: 'https://api.empresa.com',
+      apiKey: 'prod_key_geral',
+      socketUrl: 'wss://socket.empresa.com',
+      enableSocketIO: true,
+      maxFileSize: 50 * 1024 * 1024,
+      allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+    ),
+    Environment.development: EnvironmentConfig(
+      apiUrl: 'https://api-dev.empresa.com',
+      apiKey: 'dev_key_geral',
+      socketUrl: 'ws://localhost:3000',
+      enableSocketIO: true,
+      maxFileSize: 10 * 1024 * 1024,
+      allowedFileTypes: ['pdf', 'txt', 'jpg'],
+    ),
+  },
+);
+
+// Cria instância para carteira digital
+await FailoverHelper.createInstance(
+  instanceName: 'wallet',
+  initialEnvironment: Environment.production,
+  customConfigs: {
+    Environment.production: EnvironmentConfig(
+      apiUrl: 'https://wallet-api.empresa.com',
+      apiKey: 'wallet_prod_key',
+      socketUrl: 'wss://wallet-socket.empresa.com',
+      enableSocketIO: true,
+      maxFileSize: 25 * 1024 * 1024,
+      allowedFileTypes: ['pdf', 'jpg', 'png'],
+    ),
+    Environment.development: EnvironmentConfig(
+      apiUrl: 'https://wallet-dev.empresa.com',
+      apiKey: 'wallet_dev_key',
+      socketUrl: 'ws://localhost:3001',
+      enableSocketIO: true,
+      maxFileSize: 5 * 1024 * 1024,
+      allowedFileTypes: ['pdf', 'jpg'],
+    ),
+  },
+);
+```
+
+#### **Uso de Instâncias Específicas:**
+```dart
+// Requisições para backend geral
+final users = await FailoverHelper.httpRequestForInstance(
+  instanceName: 'general',
+  endpoint: '/users',
+  method: 'GET',
+);
+
+// Upload para backend geral
+final docResponse = await FailoverHelper.uploadFileForInstance(
+  instanceName: 'general',
+  endpoint: '/documents/upload',
+  filePath: '/documents/contrato.pdf',
+  fieldName: 'document',
+);
+
+// Requisições para carteira digital
+final balance = await FailoverHelper.httpRequestForInstance(
+  instanceName: 'wallet',
+  endpoint: '/balance/123',
+  method: 'GET',
+);
+
+// Socket.IO para carteira digital
+await FailoverHelper.connectSocketForInstance('wallet');
+FailoverHelper.onSocketEventForInstance(
+  instanceName: 'wallet',
+  event: 'transaction:new',
+  callback: (data) {
+    print('Nova transação: $data');
+  },
+);
+```
+
+#### **Gerenciamento de Instâncias:**
+```dart
+// Lista todas as instâncias
+final instances = FailoverHelper.availableInstances;
+print('Instâncias disponíveis: $instances'); // [general, wallet]
+
+// Define instância padrão
+FailoverHelper.setDefaultInstance('wallet');
+
+// Verifica se instância existe
+if (FailoverHelper.hasInstance('general')) {
+  print('Backend geral disponível');
+}
+
+// Obtém estatísticas de todas as instâncias
+final allStats = FailoverHelper.getAllInstancesStats();
+allStats.forEach((instanceName, stats) {
+  print('$instanceName: ${stats['currentEnvironment']}');
+});
+
+// Remove instância (útil para limpeza)
+FailoverHelper.removeInstance('wallet');
+```
+
+#### **Casos de Uso Práticos:**
+
+##### **1. Backend Corporativo + Carteira Digital:**
+```dart
+class BackendService {
+  static Future<void> initialize() async {
+    // Backend corporativo (usuários, documentos, etc.)
+    await FailoverHelper.createInstance(
+      instanceName: 'corporate',
+      initialEnvironment: Environment.production,
+      customConfigs: {
+        Environment.production: EnvironmentConfig(
+          apiUrl: 'https://corporate-api.empresa.com',
+          apiKey: 'corp_prod_key',
+          socketUrl: 'wss://corporate-socket.empresa.com',
+          enableSocketIO: true,
+        ),
+      },
+    );
+    
+    // Backend da carteira digital
+    await FailoverHelper.createInstance(
+      instanceName: 'wallet',
+      initialEnvironment: Environment.production,
+      customConfigs: {
+        Environment.production: EnvironmentConfig(
+          apiUrl: 'https://wallet-api.empresa.com',
+          apiKey: 'wallet_prod_key',
+          socketUrl: 'wss://wallet-socket.empresa.com',
+          enableSocketIO: true,
+        ),
+      },
+    );
+  }
+  
+  // Métodos para backend corporativo
+  static Future<HttpClientResponse> getUsers() async {
+    return await FailoverHelper.httpRequestForInstance(
+      instanceName: 'corporate',
+      endpoint: '/users',
+      method: 'GET',
+    );
+  }
+  
+  // Métodos para carteira digital
+  static Future<HttpClientResponse> getBalance(String userId) async {
+    return await FailoverHelper.httpRequestForInstance(
+      instanceName: 'wallet',
+      endpoint: '/balance/$userId',
+      method: 'GET',
+    );
+  }
+}
+```
+
+##### **2. Microserviços Independentes:**
+```dart
+// Cada microserviço tem sua própria instância
+final microservices = [
+  'auth',
+  'users',
+  'payments',
+  'notifications',
+  'analytics',
+];
+
+for (final service in microservices) {
+  await FailoverHelper.createInstance(
+    instanceName: service,
+    initialEnvironment: Environment.production,
+    customConfigs: {
+      Environment.production: EnvironmentConfig(
+        apiUrl: 'https://$service-api.empresa.com',
+        apiKey: '${service}_prod_key',
+        socketUrl: 'wss://$service-socket.empresa.com',
+        enableSocketIO: true,
+      ),
+    },
+  );
+}
+```
+
 ### FailoverManager
 
 - `initialize()`: Inicializa o sistema
@@ -805,6 +1006,18 @@ print('✅ Upload concluído!');
 - **`uploadFile()`**: Upload de arquivo com validação
 - **`downloadFile()`**: Download de arquivo como bytes
 - **`downloadFileToPath()`**: Download de arquivo para caminho local
+
+#### **Múltiplas Instâncias:**
+- **`createInstance()`**: Cria nova instância para backend específico
+- **`setDefaultInstance()`**: Define instância padrão
+- **`getInstance()`**: Obtém instância específica
+- **`availableInstances`**: Lista todas as instâncias
+- **`hasInstance()`**: Verifica se instância existe
+- **`removeInstance()`**: Remove instância
+- **`getAllInstancesStats()`**: Estatísticas de todas as instâncias
+- **`httpRequestForInstance()`**: HTTP request para instância específica
+- **`uploadFileForInstance()`**: Upload para instância específica
+- **`connectSocketForInstance()`**: Socket.IO para instância específica
 
 ## Exemplo Completo
 

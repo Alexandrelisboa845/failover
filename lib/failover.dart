@@ -579,6 +579,10 @@ class FailoverManager {
 class FailoverHelper {
   static final FailoverManager _manager = FailoverManager();
 
+  // Múltiplas instâncias para diferentes backends
+  static final Map<String, FailoverManager> _instances = {};
+  static String _defaultInstance = 'default';
+
   /// Inicializa o sistema
   static Future<void> initialize({
     Environment initialEnvironment = Environment.development,
@@ -923,4 +927,310 @@ class FailoverHelper {
 
   /// Reseta o manager (útil para testes)
   static void reset() => _manager.reset();
+
+  /// Múltiplas Instâncias
+  /// Cria uma nova instância para um backend específico
+  static Future<void> createInstance({
+    required String instanceName,
+    required Environment initialEnvironment,
+    Map<Environment, EnvironmentConfig>? customConfigs,
+    bool enableHealthCheck = true,
+  }) async {
+    final manager = FailoverManager();
+    await manager.initialize(
+      initialEnvironment: initialEnvironment,
+      customConfigs: customConfigs,
+      enableHealthCheck: enableHealthCheck,
+    );
+
+    _instances[instanceName] = manager;
+
+    // Define como padrão se for a primeira instância
+    if (_instances.length == 1) {
+      _defaultInstance = instanceName;
+    }
+  }
+
+  /// Define uma instância como padrão
+  static void setDefaultInstance(String instanceName) {
+    if (_instances.containsKey(instanceName)) {
+      _defaultInstance = instanceName;
+    } else {
+      throw ArgumentError('Instância "$instanceName" não encontrada');
+    }
+  }
+
+  /// Obtém uma instância específica
+  static FailoverManager getInstance(String instanceName) {
+    if (!_instances.containsKey(instanceName)) {
+      throw ArgumentError('Instância "$instanceName" não encontrada');
+    }
+    return _instances[instanceName]!;
+  }
+
+  /// Lista todas as instâncias disponíveis
+  static List<String> get availableInstances => _instances.keys.toList();
+
+  /// Obtém o nome da instância padrão
+  static String get defaultInstanceName => _defaultInstance;
+
+  /// Verifica se uma instância existe
+  static bool hasInstance(String instanceName) =>
+      _instances.containsKey(instanceName);
+
+  /// Remove uma instância
+  static void removeInstance(String instanceName) {
+    if (instanceName == _defaultInstance && _instances.length > 1) {
+      // Se for a instância padrão, define outra como padrão
+      final otherInstances = _instances.keys
+          .where((name) => name != instanceName)
+          .toList();
+      if (otherInstances.isNotEmpty) {
+        _defaultInstance = otherInstances.first;
+      }
+    }
+
+    _instances[instanceName]?.dispose();
+    _instances.remove(instanceName);
+  }
+
+  /// Obtém estatísticas de todas as instâncias
+  static Map<String, Map<String, dynamic>> getAllInstancesStats() {
+    final stats = <String, Map<String, dynamic>>{};
+
+    // Estatísticas da instância padrão
+    stats['default'] = _manager.getStats();
+
+    // Estatísticas das outras instâncias
+    for (final entry in _instances.entries) {
+      stats[entry.key] = entry.value.getStats();
+    }
+
+    return stats;
+  }
+
+  /// Métodos para instâncias específicas
+
+  /// HTTP Request para instância específica
+  static Future<HttpClientResponse> httpRequestForInstance({
+    required String instanceName,
+    required String endpoint,
+    String method = 'GET',
+    Map<String, String>? headers,
+    dynamic body,
+  }) async {
+    final manager = getInstance(instanceName);
+    return await manager.executeWithFallback(
+      operation: (config) async {
+        final client = HttpClient();
+        final uri = Uri.parse('${config.apiUrl}$endpoint');
+
+        final request = method == 'GET'
+            ? await client.getUrl(uri)
+            : method == 'POST'
+            ? await client.postUrl(uri)
+            : method == 'PUT'
+            ? await client.putUrl(uri)
+            : await client.deleteUrl(uri);
+
+        // Aplica autenticação baseada no tipo configurado
+        _applyAuthentication(request, config);
+        request.headers.set('Content-Type', 'application/json');
+
+        if (headers != null) {
+          headers.forEach((key, value) {
+            request.headers.set(key, value);
+          });
+        }
+
+        if (body != null) {
+          request.write(body.toString());
+        }
+
+        // Executa interceptores antes da requisição
+        await manager._executeRequestInterceptors(request, config);
+
+        final response = await request.close();
+
+        // Executa interceptores após a resposta
+        await manager._executeResponseInterceptors(response, config);
+
+        client.close();
+        return response;
+      },
+    );
+  }
+
+  /// Upload de arquivo para instância específica
+  static Future<HttpClientResponse> uploadFileForInstance({
+    required String instanceName,
+    required String endpoint,
+    required String filePath,
+    required String fieldName,
+    Map<String, String>? additionalFields,
+    Map<String, String>? headers,
+    String method = 'POST',
+  }) async {
+    final manager = getInstance(instanceName);
+    return await manager.executeWithFallback(
+      operation: (config) async {
+        // Valida o arquivo
+        final file = File(filePath);
+        if (!await file.exists()) {
+          throw FileSystemException('Arquivo não encontrado', filePath);
+        }
+
+        final fileSize = await file.length();
+        if (fileSize > config.maxFileSize) {
+          throw ArgumentError(
+            'Arquivo muito grande: ${fileSize} bytes (máximo: ${config.maxFileSize} bytes)',
+          );
+        }
+
+        final extension = path
+            .extension(filePath)
+            .toLowerCase()
+            .replaceAll('.', '');
+        if (!config.allowedFileTypes.contains(extension)) {
+          throw ArgumentError(
+            'Tipo de arquivo não permitido: $extension (permitidos: ${config.allowedFileTypes.join(', ')})',
+          );
+        }
+
+        // Lê o arquivo
+        final bytes = await file.readAsBytes();
+
+        // Prepara campos adicionais
+        final fields = <String, String>{
+          'filename': path.basename(filePath),
+          'size': fileSize.toString(),
+          'type': extension,
+          ...?additionalFields,
+        };
+
+        // Executa upload multipart
+        return await multipartUploadForInstance(
+          instanceName: instanceName,
+          endpoint: endpoint,
+          fields: fields,
+          files: {fieldName: bytes},
+          headers: headers,
+          method: method,
+        );
+      },
+    );
+  }
+
+  /// Multipart upload para instância específica
+  static Future<HttpClientResponse> multipartUploadForInstance({
+    required String instanceName,
+    required String endpoint,
+    required Map<String, String> fields,
+    required Map<String, List<int>> files,
+    Map<String, String>? headers,
+    String method = 'POST',
+  }) async {
+    final manager = getInstance(instanceName);
+    return await manager.executeWithFallback(
+      operation: (config) async {
+        final client = HttpClient();
+        final uri = Uri.parse('${config.apiUrl}$endpoint');
+
+        final request = method == 'POST'
+            ? await client.postUrl(uri)
+            : method == 'PUT'
+            ? await client.putUrl(uri)
+            : await client.postUrl(uri);
+
+        // Aplica autenticação baseada no tipo configurado
+        _applyAuthentication(request, config);
+
+        // Gera boundary único para multipart
+        final boundary =
+            '----failover-${DateTime.now().millisecondsSinceEpoch}';
+        request.headers.set(
+          'Content-Type',
+          'multipart/form-data; boundary=$boundary',
+        );
+
+        if (headers != null) {
+          headers.forEach((key, value) {
+            request.headers.set(key, value);
+          });
+        }
+
+        // Constrói o corpo multipart
+        final buffer = StringBuffer();
+
+        // Adiciona campos de texto
+        for (final entry in fields.entries) {
+          buffer.write('--$boundary\r\n');
+          buffer.write(
+            'Content-Disposition: form-data; name="${entry.key}"\r\n\r\n',
+          );
+          buffer.write('${entry.value}\r\n');
+        }
+
+        // Adiciona arquivos
+        for (final entry in files.entries) {
+          buffer.write('--$boundary\r\n');
+          buffer.write(
+            'Content-Disposition: form-data; name="${entry.key}"; filename="${entry.key}"\r\n',
+          );
+          buffer.write('Content-Type: application/octet-stream\r\n\r\n');
+
+          // Escreve o arquivo
+          request.write(buffer.toString());
+          request.add(entry.value);
+          buffer.clear();
+
+          buffer.write('\r\n');
+        }
+
+        // Finaliza o multipart
+        buffer.write('--$boundary--\r\n');
+        request.write(buffer.toString());
+
+        // Executa interceptores antes da requisição
+        await manager._executeRequestInterceptors(request, config);
+
+        final response = await request.close();
+
+        // Executa interceptores após a resposta
+        await manager._executeResponseInterceptors(response, config);
+
+        client.close();
+        return response;
+      },
+    );
+  }
+
+  /// Socket.IO para instância específica
+  static Future<bool> connectSocketForInstance(String instanceName) async {
+    final manager = getInstance(instanceName);
+    return await manager.connectSocket();
+  }
+
+  static bool isSocketConnectedForInstance(String instanceName) {
+    final manager = getInstance(instanceName);
+    return manager.isSocketConnected;
+  }
+
+  static Future<bool> emitSocketEventForInstance({
+    required String instanceName,
+    required String event,
+    required dynamic data,
+  }) async {
+    final manager = getInstance(instanceName);
+    return await manager.emitSocketEvent(event, data);
+  }
+
+  static void onSocketEventForInstance({
+    required String instanceName,
+    required String event,
+    required Function(dynamic) callback,
+  }) {
+    final manager = getInstance(instanceName);
+    manager.onSocketEvent(event, callback);
+  }
 }

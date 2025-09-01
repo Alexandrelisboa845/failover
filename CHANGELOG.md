@@ -44,6 +44,14 @@
 - **NOVO:** Criação automática de diretórios
 - **NOVO:** Integração com interceptores HTTP
 
+### Múltiplas Instâncias
+- **NOVO:** Suporte para múltiplas instâncias independentes
+- **NOVO:** Gerenciamento de diferentes backends (ex: geral + carteira digital)
+- **NOVO:** Métodos específicos por instância (HTTP, upload, Socket.IO)
+- **NOVO:** Fallback independente para cada instância
+- **NOVO:** Estatísticas consolidadas de todas as instâncias
+- **NOVO:** Configurações específicas por backend
+
 ### Visual
 - Logo com design de failover (setas e indicadores de ambiente)
 - Badges para versão, Flutter, licença e status do pub.dev
