@@ -101,9 +101,7 @@ enum AuthType {
 
 /// Classe principal do sistema de failover
 class FailoverManager {
-  static final FailoverManager _instance = FailoverManager._internal();
-  factory FailoverManager() => _instance;
-  FailoverManager._internal();
+  FailoverManager();
 
   Environment _currentEnvironment = Environment.development;
   final Map<Environment, EnvironmentConfig> _configs = {};
@@ -462,6 +460,7 @@ class FailoverManager {
     dispose();
     _configs.clear();
     _currentEnvironment = Environment.development;
+    _isInitialized = false;
   }
 
   /// Conecta ao Socket.IO do ambiente atual
@@ -926,7 +925,11 @@ class FailoverHelper {
       _manager.offSocketEvent(event, callback);
 
   /// Reseta o manager (útil para testes)
-  static void reset() => _manager.reset();
+  static void reset() {
+    _manager.reset();
+    _instances.clear();
+    _defaultInstance = 'default';
+  }
 
   /// Múltiplas Instâncias
   /// Cria uma nova instância para um backend específico
@@ -945,15 +948,13 @@ class FailoverHelper {
 
     _instances[instanceName] = manager;
 
-    // Define como padrão se for a primeira instância
-    if (_instances.length == 1) {
-      _defaultInstance = instanceName;
-    }
+    // A instância padrão sempre permanece como 'default'
+    // Não alteramos _defaultInstance aqui
   }
 
   /// Define uma instância como padrão
   static void setDefaultInstance(String instanceName) {
-    if (_instances.containsKey(instanceName)) {
+    if (instanceName == 'default' || _instances.containsKey(instanceName)) {
       _defaultInstance = instanceName;
     } else {
       throw ArgumentError('Instância "$instanceName" não encontrada');
@@ -962,6 +963,9 @@ class FailoverHelper {
 
   /// Obtém uma instância específica
   static FailoverManager getInstance(String instanceName) {
+    if (instanceName == 'default') {
+      return _manager;
+    }
     if (!_instances.containsKey(instanceName)) {
       throw ArgumentError('Instância "$instanceName" não encontrada');
     }
@@ -976,10 +980,17 @@ class FailoverHelper {
 
   /// Verifica se uma instância existe
   static bool hasInstance(String instanceName) =>
-      _instances.containsKey(instanceName);
+      instanceName == 'default' || _instances.containsKey(instanceName);
 
   /// Remove uma instância
   static void removeInstance(String instanceName) {
+    // Não permite remover a instância 'default'
+    if (instanceName == 'default') {
+      throw ArgumentError(
+        'Não é possível remover a instância padrão "default"',
+      );
+    }
+
     if (instanceName == _defaultInstance && _instances.length > 1) {
       // Se for a instância padrão, define outra como padrão
       final otherInstances = _instances.keys

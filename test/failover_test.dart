@@ -252,5 +252,458 @@ void main() {
         expect(() => manager.dispose(), returnsNormally);
       });
     });
+
+    group('Múltiplas Instâncias', () {
+      setUp(() {
+        // Limpa todas as instâncias antes de cada teste
+        FailoverHelper.reset();
+      });
+
+      test('deve criar e gerenciar múltiplas instâncias', () async {
+        // Inicializa instância padrão
+        await FailoverHelper.initialize(
+          initialEnvironment: Environment.development,
+          enableHealthCheck: false,
+        );
+
+        // Cria instância para backend geral
+        await FailoverHelper.createInstance(
+          instanceName: 'general',
+          initialEnvironment: Environment.production,
+          enableHealthCheck: false,
+        );
+
+        // Cria instância para carteira digital
+        await FailoverHelper.createInstance(
+          instanceName: 'wallet',
+          initialEnvironment: Environment.staging,
+          enableHealthCheck: false,
+        );
+
+        // Verifica se as instâncias foram criadas
+        expect(FailoverHelper.hasInstance('general'), isTrue);
+        expect(FailoverHelper.hasInstance('wallet'), isTrue);
+        expect(FailoverHelper.availableInstances, contains('general'));
+        expect(FailoverHelper.availableInstances, contains('wallet'));
+
+        // Verifica se a instância padrão está funcionando
+        expect(
+          FailoverHelper.getStats()['currentEnvironment'],
+          equals('development'),
+        );
+
+        // Verifica se as instâncias específicas estão funcionando
+        final generalStats = FailoverHelper.getInstance('general').getStats();
+        expect(generalStats['currentEnvironment'], equals('production'));
+
+        final walletStats = FailoverHelper.getInstance('wallet').getStats();
+        expect(walletStats['currentEnvironment'], equals('staging'));
+      });
+
+      test(
+        'deve alternar ambientes independentemente em cada instância',
+        () async {
+          // Inicializa instância padrão
+          await FailoverHelper.initialize(
+            initialEnvironment: Environment.development,
+            enableHealthCheck: false,
+          );
+
+          // Cria instância para backend geral
+          await FailoverHelper.createInstance(
+            instanceName: 'general',
+            initialEnvironment: Environment.production,
+            enableHealthCheck: false,
+          );
+
+          // Cria instância para carteira digital
+          await FailoverHelper.createInstance(
+            instanceName: 'wallet',
+            initialEnvironment: Environment.staging,
+            enableHealthCheck: false,
+          );
+
+          // Alterna ambiente na instância padrão
+          await FailoverHelper.switchTo(
+            Environment.staging,
+            skipHealthCheck: true,
+          );
+          expect(
+            FailoverHelper.getStats()['currentEnvironment'],
+            equals('staging'),
+          );
+
+          // Alterna ambiente na instância geral
+          final generalManager = FailoverHelper.getInstance('general');
+          await generalManager.switchEnvironment(
+            Environment.development,
+            skipHealthCheck: true,
+          );
+          expect(
+            generalManager.getStats()['currentEnvironment'],
+            equals('development'),
+          );
+
+          // Alterna ambiente na instância wallet
+          final walletManager = FailoverHelper.getInstance('wallet');
+          await walletManager.switchEnvironment(
+            Environment.production,
+            skipHealthCheck: true,
+          );
+          expect(
+            walletManager.getStats()['currentEnvironment'],
+            equals('production'),
+          );
+
+          // Verifica que as mudanças são independentes
+          expect(
+            FailoverHelper.getStats()['currentEnvironment'],
+            equals('staging'),
+          );
+          expect(
+            generalManager.getStats()['currentEnvironment'],
+            equals('development'),
+          );
+          expect(
+            walletManager.getStats()['currentEnvironment'],
+            equals('production'),
+          );
+        },
+      );
+
+      test('deve gerenciar instância padrão corretamente', () async {
+        // Inicializa instância padrão
+        await FailoverHelper.initialize(
+          initialEnvironment: Environment.development,
+          enableHealthCheck: false,
+        );
+
+        // Verifica se a instância padrão é definida corretamente
+        expect(FailoverHelper.defaultInstanceName, equals('default'));
+
+        // Cria primeira instância adicional
+        await FailoverHelper.createInstance(
+          instanceName: 'first',
+          initialEnvironment: Environment.production,
+          enableHealthCheck: false,
+        );
+
+        // A instância padrão deve continuar sendo 'default'
+        expect(FailoverHelper.defaultInstanceName, equals('default'));
+
+        // Define nova instância padrão
+        FailoverHelper.setDefaultInstance('first');
+        expect(FailoverHelper.defaultInstanceName, equals('first'));
+
+        // Volta para a instância padrão original
+        FailoverHelper.setDefaultInstance('default');
+        expect(FailoverHelper.defaultInstanceName, equals('default'));
+      });
+
+      test('deve remover instâncias corretamente', () async {
+        // Inicializa instância padrão
+        await FailoverHelper.initialize(
+          initialEnvironment: Environment.development,
+          enableHealthCheck: false,
+        );
+
+        // Cria múltiplas instâncias
+        await FailoverHelper.createInstance(
+          instanceName: 'general',
+          initialEnvironment: Environment.production,
+          enableHealthCheck: false,
+        );
+
+        await FailoverHelper.createInstance(
+          instanceName: 'wallet',
+          initialEnvironment: Environment.staging,
+          enableHealthCheck: false,
+        );
+
+        // Verifica se todas existem
+        expect(FailoverHelper.hasInstance('general'), isTrue);
+        expect(FailoverHelper.hasInstance('wallet'), isTrue);
+        expect(FailoverHelper.availableInstances.length, equals(2));
+
+        // Remove uma instância
+        FailoverHelper.removeInstance('general');
+        expect(FailoverHelper.hasInstance('general'), isFalse);
+        expect(FailoverHelper.hasInstance('wallet'), isTrue);
+        expect(FailoverHelper.availableInstances.length, equals(1));
+
+        // Remove a última instância
+        FailoverHelper.removeInstance('wallet');
+        expect(FailoverHelper.hasInstance('wallet'), isFalse);
+        expect(FailoverHelper.availableInstances.length, equals(0));
+      });
+
+      test('deve obter estatísticas de todas as instâncias', () async {
+        // Inicializa instância padrão
+        await FailoverHelper.initialize(
+          initialEnvironment: Environment.development,
+          enableHealthCheck: false,
+        );
+
+        // Cria instâncias adicionais
+        await FailoverHelper.createInstance(
+          instanceName: 'general',
+          initialEnvironment: Environment.production,
+          enableHealthCheck: false,
+        );
+
+        await FailoverHelper.createInstance(
+          instanceName: 'wallet',
+          initialEnvironment: Environment.staging,
+          enableHealthCheck: false,
+        );
+
+        // Obtém estatísticas de todas as instâncias
+        final allStats = FailoverHelper.getAllInstancesStats();
+
+        // Verifica se as estatísticas foram coletadas
+        expect(allStats, containsPair('default', isA<Map<String, dynamic>>()));
+        expect(allStats, containsPair('general', isA<Map<String, dynamic>>()));
+        expect(allStats, containsPair('wallet', isA<Map<String, dynamic>>()));
+
+        // Verifica se cada instância tem suas próprias estatísticas
+        expect(
+          allStats['default']!['currentEnvironment'],
+          equals('development'),
+        );
+        expect(
+          allStats['general']!['currentEnvironment'],
+          equals('production'),
+        );
+        expect(allStats['wallet']!['currentEnvironment'], equals('staging'));
+      });
+
+      test(
+        'deve lançar exceção ao tentar acessar instância inexistente',
+        () async {
+          // Inicializa instância padrão
+          await FailoverHelper.initialize(
+            initialEnvironment: Environment.development,
+            enableHealthCheck: false,
+          );
+
+          // Tenta acessar instância que não existe
+          expect(
+            () => FailoverHelper.getInstance('inexistente'),
+            throwsA(isA<ArgumentError>()),
+          );
+
+          // Tenta definir instância inexistente como padrão
+          expect(
+            () => FailoverHelper.setDefaultInstance('inexistente'),
+            throwsA(isA<ArgumentError>()),
+          );
+        },
+      );
+
+      test(
+        'deve funcionar com listeners independentes por instância',
+        () async {
+          // Inicializa instância padrão
+          await FailoverHelper.initialize(
+            initialEnvironment: Environment.development,
+            enableHealthCheck: false,
+          );
+
+          // Cria instância adicional
+          await FailoverHelper.createInstance(
+            instanceName: 'general',
+            initialEnvironment: Environment.production,
+            enableHealthCheck: false,
+          );
+
+          // Adiciona listeners para cada instância
+          final defaultListener = (Environment env) => print('Default: $env');
+          final generalListener = (Environment env) => print('General: $env');
+
+          FailoverHelper.onEnvironmentChanged(defaultListener);
+          FailoverHelper.getInstance('general').addListener(generalListener);
+
+          // Alterna ambiente na instância padrão
+          await FailoverHelper.switchTo(
+            Environment.staging,
+            skipHealthCheck: true,
+          );
+          expect(
+            FailoverHelper.getStats()['currentEnvironment'],
+            equals('staging'),
+          );
+
+          // Alterna ambiente na instância geral
+          final generalManager = FailoverHelper.getInstance('general');
+          await generalManager.switchEnvironment(
+            Environment.development,
+            skipHealthCheck: true,
+          );
+          expect(
+            generalManager.getStats()['currentEnvironment'],
+            equals('development'),
+          );
+
+          // Verifica que as mudanças são independentes
+          expect(
+            FailoverHelper.getStats()['currentEnvironment'],
+            equals('staging'),
+          );
+          expect(
+            generalManager.getStats()['currentEnvironment'],
+            equals('development'),
+          );
+        },
+      );
+
+      test('deve funcionar com Socket.IO independente por instância', () async {
+        // Inicializa instância padrão
+        await FailoverHelper.initialize(
+          initialEnvironment: Environment.development,
+          enableHealthCheck: false,
+        );
+
+        // Cria instância adicional
+        await FailoverHelper.createInstance(
+          instanceName: 'general',
+          initialEnvironment: Environment.production,
+          enableHealthCheck: false,
+        );
+
+        // Verifica se Socket.IO está desconectado inicialmente
+        expect(FailoverHelper.isSocketConnected, isFalse);
+        expect(FailoverHelper.isSocketConnectedForInstance('general'), isFalse);
+
+        // Tenta conectar Socket.IO na instância padrão
+        final defaultConnected = await FailoverHelper.connectSocket();
+        expect(
+          defaultConnected,
+          isTrue,
+        ); // Retorna true pois Socket.IO está configurado
+
+        // Tenta conectar Socket.IO na instância geral
+        final generalConnected = await FailoverHelper.connectSocketForInstance(
+          'general',
+        );
+        expect(
+          generalConnected,
+          isTrue,
+        ); // Retorna true pois Socket.IO está configurado
+
+        // Verifica se ambas permanecem desconectadas
+        expect(FailoverHelper.isSocketConnected, isFalse);
+        expect(FailoverHelper.isSocketConnectedForInstance('general'), isFalse);
+      });
+
+      test(
+        'deve funcionar com HTTP requests independentes por instância',
+        () async {
+          // Inicializa instância padrão
+          await FailoverHelper.initialize(
+            initialEnvironment: Environment.development,
+            enableHealthCheck: false,
+          );
+
+          // Cria instância adicional
+          await FailoverHelper.createInstance(
+            instanceName: 'general',
+            initialEnvironment: Environment.production,
+            enableHealthCheck: false,
+          );
+
+          // Tenta fazer request na instância padrão (deve falhar com URL inválida)
+          try {
+            await FailoverHelper.httpRequest(endpoint: '/test', method: 'GET');
+            fail('Deveria ter lançado exceção');
+          } catch (e) {
+            expect(e, isA<Exception>());
+          }
+
+          // Tenta fazer request na instância geral (deve falhar com URL inválida)
+          try {
+            await FailoverHelper.httpRequestForInstance(
+              instanceName: 'general',
+              endpoint: '/test',
+              method: 'GET',
+            );
+            fail('Deveria ter lançado exceção');
+          } catch (e) {
+            expect(e, isA<Exception>());
+          }
+        },
+      );
+
+      test(
+        'deve manter instância padrão funcionando após criar instâncias adicionais',
+        () async {
+          // Inicializa instância padrão
+          await FailoverHelper.initialize(
+            initialEnvironment: Environment.development,
+            enableHealthCheck: false,
+          );
+
+          // Verifica se a instância padrão está funcionando
+          expect(
+            FailoverHelper.getStats()['currentEnvironment'],
+            equals('development'),
+          );
+          expect(
+            FailoverHelper.currentEnvironment,
+            equals(Environment.development),
+          );
+
+          // Cria instâncias adicionais
+          await FailoverHelper.createInstance(
+            instanceName: 'general',
+            initialEnvironment: Environment.production,
+            enableHealthCheck: false,
+          );
+
+          await FailoverHelper.createInstance(
+            instanceName: 'wallet',
+            initialEnvironment: Environment.staging,
+            enableHealthCheck: false,
+          );
+
+          // Verifica se a instância padrão continua funcionando
+          expect(
+            FailoverHelper.getStats()['currentEnvironment'],
+            equals('development'),
+          );
+          expect(
+            FailoverHelper.currentEnvironment,
+            equals(Environment.development),
+          );
+
+          // Alterna ambiente na instância padrão
+          await FailoverHelper.switchTo(
+            Environment.staging,
+            skipHealthCheck: true,
+          );
+          expect(
+            FailoverHelper.getStats()['currentEnvironment'],
+            equals('staging'),
+          );
+          expect(
+            FailoverHelper.currentEnvironment,
+            equals(Environment.staging),
+          );
+
+          // Verifica se as outras instâncias não foram afetadas
+          expect(
+            FailoverHelper.getInstance(
+              'general',
+            ).getStats()['currentEnvironment'],
+            equals('production'),
+          );
+          expect(
+            FailoverHelper.getInstance(
+              'wallet',
+            ).getStats()['currentEnvironment'],
+            equals('staging'),
+          );
+        },
+      );
+    });
   });
 }
